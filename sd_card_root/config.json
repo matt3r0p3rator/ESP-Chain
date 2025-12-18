@@ -1,0 +1,27 @@
+{
+  "device": {
+    "name": "ESP-Chain",
+    "version": "1.0.0",
+    "modules_enabled": ["badusb", "wifi", "subghz", "lora"]
+  },
+  "display": {
+    "brightness": 128,
+    "timeout_seconds": 30,
+    "theme": "green_matrix"
+  },
+  "wifi": {
+    "auto_scan": true,
+    "save_handshakes": true,
+    "deauth_reason": 7
+  },
+  "badusb": {
+    "default_delay_ms": 100,
+    "auto_execute": false
+  },
+  "lora": {
+    "frequency": 915000000,
+    "spreading_factor": 7,
+    "bandwidth": 125000,
+    "tx_power": 22
+  }
+}

