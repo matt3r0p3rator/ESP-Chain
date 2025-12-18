@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "author": "GitHub Copilot",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-s3-devkitc-1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "board-st7789", "id": "lcd", "top": 0, "left": 200, "attrs": { "height": "320", "width": "170" } },
+    { "type": "wokwi-ky-040", "id": "encoder", "top": 150, "left": 200, "attrs": {} },
+    { "type": "wokwi-pushbutton", "id": "btn", "top": 250, "left": 200, "attrs": { "color": "green" } },
+    { "type": "wokwi-microsd-card", "id": "sd", "top": 350, "left": 200, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    
+    [ "esp:11", "lcd:MOSI", "green", [ "v0" ] ],
+    [ "esp:12", "lcd:SCLK", "blue", [ "v0" ] ],
+    [ "esp:10", "lcd:CS", "yellow", [ "v0" ] ],
+    [ "esp:9", "lcd:DC", "orange", [ "v0" ] ],
+    [ "esp:46", "lcd:RST", "purple", [ "v0" ] ],
+    [ "esp:38", "lcd:BL", "white", [ "v0" ] ],
+    [ "esp:GND", "lcd:GND", "black", [ "v0" ] ],
+    [ "esp:3V3", "lcd:VCC", "red", [ "v0" ] ],
+
+    [ "esp:17", "encoder:DT", "green", [ "v0" ] ],
+    [ "esp:18", "encoder:CLK", "blue", [ "v0" ] ],
+    [ "esp:21", "encoder:SW", "orange", [ "v0" ] ],
+    [ "esp:GND", "encoder:GND", "black", [ "v0" ] ],
+    [ "esp:3V3", "encoder:VCC", "red", [ "v0" ] ],
+
+    [ "esp:14", "btn:1.l", "green", [ "v0" ] ],
+    [ "esp:GND", "btn:2.l", "black", [ "v0" ] ],
+
+    [ "esp:15", "sd:CS", "yellow", [ "v0" ] ],
+    [ "esp:11", "sd:MOSI", "green", [ "v0" ] ],
+    [ "esp:13", "sd:MISO", "blue", [ "v0" ] ],
+    [ "esp:12", "sd:SCK", "orange", [ "v0" ] ],
+    [ "esp:3V3", "sd:VCC", "red", [ "v0" ] ],
+    [ "esp:GND", "sd:GND", "black", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}
