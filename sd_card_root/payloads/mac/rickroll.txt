@@ -1,0 +1,6 @@
+REM Mac Rickroll
+DELAY 1000
+GUI SPACE
+DELAY 500
+STRING https://www.youtube.com/watch?v=dQw4w9WgXcQ
+ENTER

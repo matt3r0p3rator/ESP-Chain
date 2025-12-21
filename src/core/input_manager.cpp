@@ -1,62 +1,54 @@
 #include "input_manager.h"
 
-InputManager::InputManager(MenuSystem* menuSystem) : menuSystem(menuSystem) {}
+InputManager::InputManager(MenuSystem* menu) : menuSystem(menu) {}
 
 void InputManager::begin() {
-    // Init Encoder
-    ESP32Encoder::useInternalWeakPullResistors = puType::up;
-    encoder.attachHalfQuad(ENCODER_DT, ENCODER_CLK);
-    encoder.setCount(0);
-    encoder.setFilter(1023); // Add filter for debouncing
-
-    pinMode(ENCODER_SW, INPUT_PULLUP);
-    pinMode(BTN_BOTTOM, INPUT_PULLUP);
+    // BTN_0 is not usable
+    pinMode(BTN_14, INPUT_PULLUP);
 }
 
 void InputManager::update() {
-    // Handle Encoder Rotation
-    long newPosition = encoder.getCount() / 2;
-    if (newPosition != lastEncoderPosition) {
-        if (newPosition > lastEncoderPosition) {
-            menuSystem->handleInput(1); // Down
-        } else {
-            menuSystem->handleInput(0); // Up
-        }
-        lastEncoderPosition = newPosition;
-    }
+    unsigned long currentMillis = millis();
 
-    // Handle Encoder Button
-    int btnState = digitalRead(ENCODER_SW);
-    
-    if (btnState == LOW && lastBtnState == HIGH) {
-        // Button Pressed
-        btnPressTime = millis();
-        btnLongPressHandled = false;
-    } else if (btnState == LOW && lastBtnState == LOW) {
-        // Button Held
-        if (!btnLongPressHandled && (millis() - btnPressTime > LONG_PRESS_DELAY)) {
-            menuSystem->handleInput(3); // Back (Long Press)
-            btnLongPressHandled = true;
-        }
-    } else if (btnState == HIGH && lastBtnState == LOW) {
-        // Button Released
-        if (!btnLongPressHandled) {
-            // Short Press
-            if (millis() - btnPressTime > DEBOUNCE_DELAY) {
-                menuSystem->handleInput(2); // Select
+    // --- Button 14 Handling ---
+    int reading14 = digitalRead(BTN_14);
+
+    if (reading14 != lastBtn14State) {
+        // State changed
+        if (reading14 == LOW) { // Pressed
+            btn14PressTime = currentMillis;
+            btn14LongPressHandled = false;
+        } else { // Released
+            if (!btn14LongPressHandled) {
+                // Potential Click
+                if (clickCount == 0) {
+                    clickCount = 1;
+                    lastClickTime = currentMillis;
+                } else {
+                    // Second click detected!
+                    clickCount = 0; // Reset
+                    // Double Click Action: Select (2)
+                    menuSystem->handleInput(2);
+                }
             }
         }
-    }
-    lastBtnState = btnState;
-
-    // Handle Bottom Button (Simple Press)
-    int bottomBtnState = digitalRead(BTN_BOTTOM);
-    if (bottomBtnState == LOW && lastBottomBtnState == HIGH) {
-        bottomBtnPressTime = millis();
-    } else if (bottomBtnState == HIGH && lastBottomBtnState == LOW) {
-        if (millis() - bottomBtnPressTime > DEBOUNCE_DELAY) {
-            menuSystem->handleInput(3); // Back
+        delay(DEBOUNCE_DELAY); // Simple debounce
+    } else if (reading14 == LOW) {
+        // Held down
+        if (!btn14LongPressHandled && (currentMillis - btn14PressTime > LONG_PRESS_DELAY)) {
+            // Long Press: Back (3)
+            menuSystem->handleInput(3);
+            btn14LongPressHandled = true;
+            clickCount = 0; // Cancel any pending clicks
         }
     }
-    lastBottomBtnState = bottomBtnState;
+    
+    // Check for single click timeout
+    if (clickCount > 0 && (currentMillis - lastClickTime > DOUBLE_CLICK_DELAY)) {
+        clickCount = 0;
+        // Single Click Action: Scroll Down (1)
+        menuSystem->handleInput(1);
+    }
+    
+    lastBtn14State = reading14;
 }

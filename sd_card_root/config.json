@@ -1,13 +1,13 @@
 {
   "device": {
     "name": "ESP-Chain",
-    "version": "1.0.0",
-    "modules_enabled": ["badusb", "wifi", "subghz", "lora"]
+    "version": "alpha-1.0",
+    "modules_enabled": ["badusb", "wifi"]
   },
   "display": {
     "brightness": 128,
-    "timeout_seconds": 30,
-    "theme": "green_matrix"
+    "timeout_seconds": -1,
+    "theme": "purple_black"
   },
   "wifi": {
     "auto_scan": true,

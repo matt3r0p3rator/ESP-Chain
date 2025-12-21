@@ -1,13 +1,10 @@
 #pragma once
 #include <Arduino.h>
-#include <ESP32Encoder.h>
 #include "menu_system.h"
 
 // Pin Definitions
-#define ENCODER_CLK 18
-#define ENCODER_DT  17
-#define ENCODER_SW  21
-#define BTN_BOTTOM  14
+#define BTN_0  0
+#define BTN_14 14
 
 class InputManager {
 public:
@@ -17,19 +14,22 @@ public:
 
 private:
     MenuSystem* menuSystem;
-    ESP32Encoder encoder;
     
-    long lastEncoderPosition = 0;
-    
-    // Encoder Button State
-    int lastBtnState = HIGH;
-    unsigned long btnPressTime = 0;
-    bool btnLongPressHandled = false;
+    // Button 0 State
+    int lastBtn0State = HIGH;
+    unsigned long btn0PressTime = 0;
+    bool btn0LongPressHandled = false;
 
-    // Bottom Button State
-    int lastBottomBtnState = HIGH;
-    unsigned long bottomBtnPressTime = 0;
+    // Button 14 State
+    int lastBtn14State = HIGH;
+    unsigned long btn14PressTime = 0;
+    bool btn14LongPressHandled = false;
+    
+    // Double Click Logic
+    int clickCount = 0;
+    unsigned long lastClickTime = 0;
     
     const unsigned long DEBOUNCE_DELAY = 50;
     const unsigned long LONG_PRESS_DELAY = 500;
+    const unsigned long DOUBLE_CLICK_DELAY = 300; // Max time between clicks
 };
