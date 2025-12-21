@@ -17,7 +17,7 @@ public:
     void turnOff();
     void clear();
     void clearContent();
-    void drawStatusBar(String status, float voltage, bool sdStatus);
+    void drawStatusBar(String status, float voltage, bool sdStatus, bool showClock = true, String replacement = "");
     void drawMenuTitle(String title);
     void drawMenuItem(String text, int index, bool selected);
     void updateClock();

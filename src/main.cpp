@@ -9,8 +9,7 @@
 #include "modules/file_explorer_module.h"
 #include "modules/firmware_upgrade.h"
 #include "modules/settings_module.h"
-#include "modules/gps/gps_module.h"
-#include "modules/compass/compass_module.h"
+#include "modules/i2c_scanner_module.h"
 #include "badusb_module.h"
 #include "sd_manager.h"
 #include "config_manager.h"
@@ -18,9 +17,24 @@
 // --- Sleep Module ---
 class SleepModule : public Module {
 public:
+    int PIN_EXT_POWER = 17;
     void init() override {
         // Configure Wakeup on Button 14 (Low)
         // Ensure pullup is enabled for the button during sleep
+        // Formally stop SD card operations
+        extern SDManager sdManager;
+        sdManager.end();
+
+        // Prevent phantom power to SD card by grounding SPI pins
+        pinMode(10, OUTPUT); digitalWrite(10, LOW); // CS
+        pinMode(11, OUTPUT); digitalWrite(11, LOW); // MOSI
+        pinMode(12, OUTPUT); digitalWrite(12, LOW); // SCK
+        pinMode(13, INPUT_PULLDOWN);                // MISO
+
+        delay(400); // Allow time for any previous operations
+        pinMode(PIN_EXT_POWER, OUTPUT);
+        digitalWrite(PIN_EXT_POWER, LOW); // Turn OFF NPN
+        gpio_hold_en((gpio_num_t)PIN_EXT_POWER); // Hold the state in deep sleep
         rtc_gpio_pullup_en(GPIO_NUM_14);
         rtc_gpio_pulldown_dis(GPIO_NUM_14);
         esp_sleep_enable_ext1_wakeup(1ULL << 14, ESP_EXT1_WAKEUP_ANY_LOW);
@@ -119,9 +133,10 @@ CounterModule counterModule;
 FileExplorerModule fileExplorerModule;
 FirmwareUpgradeModule firmwareUpgradeModule;
 SettingsModule settingsModule;
-GPSModule gpsModule;
-CompassModule compassModule;
 BadUSBModule badusbModule;
+I2CScannerModule i2cScannerModule;
+
+int PIN_EXT_POWER = 17;
 
 void setup() {
     Serial.begin(115200);
@@ -129,7 +144,25 @@ void setup() {
 
     // Initialize Display
     displayManager.init();
-    displayManager.drawStatusBar("Booting...", displayManager.getBatteryVoltage(), false);
+    displayManager.initRTC();
+    displayManager.getTFT()->setTextDatum(MC_DATUM);
+    displayManager.getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
+    displayManager.drawStatusBar("Booting...", displayManager.getBatteryVoltage(), false, false, "ESP-Chain");
+    pinMode(PIN_EXT_POWER, OUTPUT);
+    gpio_hold_dis((gpio_num_t)PIN_EXT_POWER); // Disable hold before writing
+    
+    // Cycle power to ensure SD card reset
+    digitalWrite(PIN_EXT_POWER, LOW);
+    delay(250);
+    digitalWrite(PIN_EXT_POWER, HIGH); // Turn ON NPN
+
+    displayManager.getTFT()->drawString("Wait for External Power", 160, 40, 2);
+    delay(700); // Wait for SPI devices to power up
+    //Write initial status to tft
+    displayManager.clearContent();
+    displayManager.drawStatusBar("Initializing...", displayManager.getBatteryVoltage(), false, true);
+    displayManager.getTFT()->drawString("Initializing SD Card...", 160, 40, 2);
+    
 
     // Initialize SD Card
     if (sdManager.init()) {
@@ -142,7 +175,8 @@ void setup() {
         }
     } else {
         Serial.println("SD Card Failed");
-        displayManager.drawStatusBar("SD Failed", displayManager.getBatteryVoltage(), false);
+        displayManager.getTFT()->drawString("SD Card Failed", 160, 80, 2);
+        delay(2000);
     }
 
     delay(1000);
@@ -154,15 +188,12 @@ void setup() {
     // The order here determines the order in the menu!
     // To move items, just cut and paste these lines.
     
-    //menuSystem.registerModule(&counterModule);
     menuSystem.registerModule(&wifiModule);
-    menuSystem.registerModule(&gpsModule);
-    menuSystem.registerModule(&compassModule);
     menuSystem.registerModule(&badusbModule);
     menuSystem.registerModule(&fileExplorerModule);
     menuSystem.registerModule(&sleepModule);
     menuSystem.registerModule(&settingsModule);
-    //menuSystem.registerModule(&firmwareUpgradeModule);
+    menuSystem.registerModule(&i2cScannerModule);
     menuSystem.registerModule(&aboutModule);
 
     // Initial Draw

@@ -26,6 +26,11 @@ bool SDManager::init() {
     return true;
 }
 
+void SDManager::end() {
+    SD.end();
+    isSDMounted = false;
+}
+
 bool SDManager::isMounted() {
     return isSDMounted;
 }

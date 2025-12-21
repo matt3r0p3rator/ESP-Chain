@@ -51,11 +51,11 @@ public:
     }
 
     String getName() override {
-        return "WiFi";
+        return "WiFi Tools";
     }
 
     String getDescription() override {
-        return "Scan & Attack";
+        return "WiFi Tools";
     }
 
     void drawMenu(DisplayManager* display) override {

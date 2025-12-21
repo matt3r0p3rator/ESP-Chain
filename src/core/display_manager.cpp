@@ -25,6 +25,11 @@ void DisplayManager::init() {
 }
 
 void DisplayManager::initRTC() {
+    // Enable external power (Pin 17) for I2C devices
+    pinMode(17, OUTPUT);
+    digitalWrite(17, HIGH);
+    delay(100);
+
     Wire.begin(43, 44);
     if (!rtc.begin()) {
         Serial.println("Couldn't find RTC");
@@ -47,19 +52,24 @@ void DisplayManager::clear() {
 void DisplayManager::clearContent() {
     tft->fillRect(0, 20, 320, 150, THEME_BG);
 }
-void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus) {
+
+void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, bool showClock, String replacement) {
     tft->fillRect(0, 0, 320, 20, THEME_SECONDARY);
     tft->setTextColor(THEME_TEXT, THEME_SECONDARY);
     tft->setTextDatum(ML_DATUM);
     tft->drawString(status.c_str(), 5, 10, 2);
     
-    // Draw Clock
-    if (rtcInitialized) {
-        DateTime now = rtc.now();
-        char timeStr[10];
-        sprintf(timeStr, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-        tft->setTextDatum(MC_DATUM);
-        tft->drawString(timeStr, 160, 10, 2);
+    // Draw Clock or Replacement
+    tft->setTextDatum(MC_DATUM);
+    if (showClock) {
+        if (rtcInitialized) {
+            DateTime now = rtc.now();
+            char timeStr[10];
+            sprintf(timeStr, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+            tft->drawString(timeStr, 160, 10, 2);
+        }
+    } else {
+        tft->drawString(replacement.c_str(), 160, 10, 2);
     }
 
     // Draw SD Icon

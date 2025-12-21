@@ -13,6 +13,7 @@ struct FileEntry {
 class SDManager {
 public:
     bool init();
+    void end();
     bool isMounted();
     String readFile(String path);
     bool writeFile(String path, String content);
