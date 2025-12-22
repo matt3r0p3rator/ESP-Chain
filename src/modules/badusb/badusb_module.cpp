@@ -56,7 +56,7 @@ const unsigned char* BadUSBModule::getIcon() {
 }
 
 int BadUSBModule::getIconWidth() {
-    return 24;
+    return 16;
 }
 
 int BadUSBModule::getIconHeight() {
