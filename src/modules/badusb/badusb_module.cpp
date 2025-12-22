@@ -52,7 +52,7 @@ String BadUSBModule::getName() {
 }
 
 const unsigned char* BadUSBModule::getIcon() {
-    return image_badusb_bits;
+    return image_monitor_bits;
 }
 
 int BadUSBModule::getIconWidth() {
