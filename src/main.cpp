@@ -7,12 +7,15 @@
 #include "modules/wifi/wifi_module.h"
 #include "modules/counter_module.h" // 1. Include your new module header
 #include "modules/file_explorer_module.h"
-#include "modules/firmware_upgrade.h"
 #include "modules/settings_module.h"
 #include "modules/i2c_scanner_module.h"
+#include "modules/nrf24/nrf24_module.h"
+#include "modules/usb_storage_module.h"
+#include "modules/wifi_storage_module.h"
 #include "badusb_module.h"
 #include "sd_manager.h"
 #include "config_manager.h"
+#include "ui/icons.h"
 
 // --- Sleep Module ---
 class SleepModule : public Module {
@@ -56,6 +59,10 @@ public:
     String getName() override {
         return "Deep Sleep";
     }
+    const unsigned char* getIcon() override { return image_device_sleep_mode_white_bits; }
+    int getIconWidth() override { return 15; }
+    int getIconHeight() override { return 16; }
+    int getIconOffsetY() override { return 1; }
 
     String getDescription() override {
         return "Enter Deep Sleep";
@@ -91,6 +98,9 @@ public:
     String getName() override {
         return "About";
     }
+    const unsigned char* getIcon() override { return image_menu_information_sign_white_bits; }
+    int getIconWidth() override { return 15; }
+    int getIconHeight() override { return 16; }
     
     String getDescription() override {
         return "System Info";
@@ -131,10 +141,12 @@ SleepModule sleepModule;
 WiFiModule wifiModule;
 CounterModule counterModule;
 FileExplorerModule fileExplorerModule;
-FirmwareUpgradeModule firmwareUpgradeModule;
 SettingsModule settingsModule;
 BadUSBModule badusbModule;
 I2CScannerModule i2cScannerModule;
+NRF24Module nrf24Module;
+USBStorageModule usbStorageModule;
+WiFiStorageModule wifiStorageModule;
 
 int PIN_EXT_POWER = 17;
 
@@ -147,7 +159,7 @@ void setup() {
     displayManager.initRTC();
     displayManager.getTFT()->setTextDatum(MC_DATUM);
     displayManager.getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
-    displayManager.drawStatusBar("Booting...", displayManager.getBatteryVoltage(), false, false, "ESP-Chain");
+    displayManager.drawStatusBar("Booting...", displayManager.getBatteryVoltage(), false, false, false, "ESP-Chain");
     pinMode(PIN_EXT_POWER, OUTPUT);
     gpio_hold_dis((gpio_num_t)PIN_EXT_POWER); // Disable hold before writing
     
@@ -160,7 +172,7 @@ void setup() {
     delay(700); // Wait for SPI devices to power up
     //Write initial status to tft
     displayManager.clearContent();
-    displayManager.drawStatusBar("Initializing...", displayManager.getBatteryVoltage(), false, true);
+    displayManager.drawStatusBar("Initializing...", displayManager.getBatteryVoltage(), false, false, true);
     displayManager.getTFT()->drawString("Initializing SD Card...", 160, 40, 2);
     
 
@@ -175,7 +187,8 @@ void setup() {
         }
     } else {
         Serial.println("SD Card Failed");
-        displayManager.getTFT()->drawString("SD Card Failed", 160, 80, 2);
+        displayManager.getTFT()->drawString("SD Card Failed", 160, 40, 2);
+        displayManager.getTFT()->drawBitmap(160 - 8, 80, image_SDQuestion_bits, 35, 43, TFT_YELLOW);
         delay(2000);
     }
 
@@ -190,7 +203,10 @@ void setup() {
     
     menuSystem.registerModule(&wifiModule);
     menuSystem.registerModule(&badusbModule);
+    menuSystem.registerModule(&nrf24Module);
     menuSystem.registerModule(&fileExplorerModule);
+    menuSystem.registerModule(&usbStorageModule);
+    menuSystem.registerModule(&wifiStorageModule);
     menuSystem.registerModule(&sleepModule);
     menuSystem.registerModule(&settingsModule);
     menuSystem.registerModule(&i2cScannerModule);

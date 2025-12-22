@@ -5,6 +5,7 @@
 #include "USBHIDKeyboard.h"
 #include "USB.h"
 #include "config_manager.h"
+#include "../../ui/icons.h"
 
 extern SDManager sdManager;
 extern DisplayManager displayManager;
@@ -48,6 +49,18 @@ void BadUSBModule::loop() {
 
 String BadUSBModule::getName() {
     return "BadUSB";
+}
+
+const unsigned char* BadUSBModule::getIcon() {
+    return image_badusb_bits;
+}
+
+int BadUSBModule::getIconWidth() {
+    return 24;
+}
+
+int BadUSBModule::getIconHeight() {
+    return 16;
 }
 
 String BadUSBModule::getDescription() {

@@ -8,6 +8,9 @@ public:
     void init() override;
     void loop() override;
     String getName() override;
+    const unsigned char* getIcon() override;
+    int getIconWidth() override;
+    int getIconHeight() override;
     String getDescription() override;
     void drawMenu(DisplayManager* display) override;
     bool handleInput(uint8_t button) override;

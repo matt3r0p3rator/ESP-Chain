@@ -53,7 +53,7 @@ void DisplayManager::clearContent() {
     tft->fillRect(0, 20, 320, 150, THEME_BG);
 }
 
-void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, bool showClock, String replacement) {
+void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, bool wifiStatus, bool showClock, String replacement) {
     tft->fillRect(0, 0, 320, 20, THEME_SECONDARY);
     tft->setTextColor(THEME_TEXT, THEME_SECONDARY);
     tft->setTextDatum(ML_DATUM);
@@ -72,11 +72,18 @@ void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, 
         tft->drawString(replacement.c_str(), 160, 10, 2);
     }
 
+    // Draw WiFi Icon
+    if (wifiStatus) {
+        tft->setTextColor(TFT_CYAN, THEME_SECONDARY);
+        tft->drawBitmap(235, 2, image_cloud_sync_bits, 17, 16, TFT_CYAN);
+    }
+
     // Draw SD Icon
-    uint16_t color = sdStatus ? TFT_GREEN : TFT_RED;
-    tft->drawBitmap(255, 2, image_folder_explorer_bits, 17, 16, color);
+    uint16_t color = sdStatus ? TFT_CYAN : TFT_RED; // White
+    tft->drawBitmap(255, 2, sdStatus ? image_micro_sd_bits : image_micro_sd_no_card_bits, 14, 16, color);
     
     tft->setTextDatum(MR_DATUM);
+    tft->setTextColor(THEME_TEXT, THEME_SECONDARY);
     tft->drawString((String(voltage, 2) + "V").c_str(), 315, 10, 2);
     
     tft->setTextColor(THEME_TEXT, THEME_BG); // Reset
@@ -91,19 +98,50 @@ void DisplayManager::drawMenuTitle(String title) {
     // Title removed as per user request
 }
 
-void DisplayManager::drawMenuItem(String text, int index, bool selected) {
+void DisplayManager::drawMenuItem(String text, int index, bool selected, const unsigned char* icon, int iconWidth, int iconHeight, int iconSpacing, int iconOffsetY) {
     int yPos = 25 + (index * 25); 
+    int radius = 4;
+    int width = 290;
     
     if (selected) {
-        tft->fillRect(10, yPos, 300, 22, THEME_PRIMARY);
+        tft->fillRoundRect(10, yPos, width, 22, radius, THEME_PRIMARY);
         tft->setTextColor(THEME_TEXT, THEME_PRIMARY);
     } else {
-        tft->fillRect(10, yPos, 300, 22, THEME_BG);
+        tft->fillRoundRect(10, yPos, width, 22, radius, THEME_BG);
         tft->setTextColor(THEME_TEXT, THEME_BG);
+    }
+    tft->drawRoundRect(10, yPos, width, 22, radius, TFT_WHITE);
+    
+    int textX = 20;
+    if (icon) {
+        int iconY = yPos + (22 - iconHeight) / 2 + iconOffsetY;
+        tft->drawBitmap(textX, iconY, icon, iconWidth, iconHeight, THEME_TEXT);
+        textX += iconWidth + iconSpacing;
     }
     
     tft->setTextDatum(ML_DATUM);
-    tft->drawString(text.c_str(), 20, yPos + 11, 2);
+    tft->drawString(text.c_str(), textX, yPos + 11, 2);
+}
+
+void DisplayManager::drawScrollBar(int totalItems, int currentItem, int visibleItems) {
+    if (totalItems <= visibleItems) return;
+    
+    int scrollBarX = 308;
+    int scrollBarY = 25;
+    int scrollBarWidth = 6;
+    int scrollBarHeight = 125; // 5 items * 25px
+    // Draw track
+    tft->drawRoundRect(scrollBarX, scrollBarY, scrollBarWidth, scrollBarHeight, 3, THEME_SECONDARY);
+    // Calculate thumb
+    float ratio = (float)visibleItems / totalItems;
+    int thumbHeight = scrollBarHeight * ratio;
+    if (thumbHeight < 10) thumbHeight = 10;
+    // Calculate thumb position
+    int maxScroll = totalItems - visibleItems;
+    float scrollRatio = (float)currentItem / maxScroll;
+    int maxThumbY = scrollBarHeight - thumbHeight;
+    int thumbY = scrollBarY + (scrollRatio * maxThumbY);
+    tft->fillRoundRect(scrollBarX + 1, thumbY + 1, scrollBarWidth - 2, thumbHeight - 2, 2, TFT_WHITE);
 }
 
 void DisplayManager::updateClock() {

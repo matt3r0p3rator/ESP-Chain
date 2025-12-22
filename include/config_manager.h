@@ -13,6 +13,8 @@ struct ConfigData {
     bool wifiAutoScan = true;
     bool wifiSaveHandshakes = true;
     int wifiDeauthReason = 7;
+    String wifiStorageSSID = "ESP-Chain-Files";
+    String wifiStoragePassword = "password";
 
     // BadUSB
     int badusbDelay = 100;

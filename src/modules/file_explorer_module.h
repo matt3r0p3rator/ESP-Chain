@@ -2,6 +2,7 @@
 #include "module_base.h"
 #include "sd_manager.h"
 #include "display_manager.h"
+#include "../ui/icons.h"
 #include <vector>
 
 class FileExplorerModule : public Module {
@@ -64,6 +65,11 @@ public:
         return "File Explorer";
     }
 
+    const unsigned char* getIcon() override { return image_folder_explorer_bits; }
+    int getIconWidth() override { return 24; }
+    int getIconHeight() override { return 16; }
+    int getIconSpacing() override { return 6 ; }
+
     String getDescription() override {
         return "Browse SD Card";
     }
@@ -109,6 +115,7 @@ public:
 
             display->drawMenuItem(label, i, idx == selectedIndex);
         }
+        display->drawScrollBar(currentFiles.size(), scrollOffset, 5);
     }
 
     bool handleInput(uint8_t button) override {

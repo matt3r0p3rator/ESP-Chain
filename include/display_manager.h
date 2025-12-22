@@ -17,10 +17,11 @@ public:
     void turnOff();
     void clear();
     void clearContent();
-    void drawStatusBar(String status, float voltage, bool sdStatus, bool showClock = true, String replacement = "");
+    void drawStatusBar(String status, float voltage, bool sdStatus, bool wifiStatus, bool showClock = true, String replacement = "");
     void drawMenuTitle(String title);
-    void drawMenuItem(String text, int index, bool selected);
+    void drawMenuItem(String text, int index, bool selected, const unsigned char* icon = nullptr, int iconWidth = 16, int iconHeight = 16, int iconSpacing = 8, int iconOffsetY = 0);
     void updateClock();
+    void drawScrollBar(int totalItems, int scrollOffset, int itemsPerPage);
     float getBatteryVoltage();
     void setTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second);
     DateTime getTime();

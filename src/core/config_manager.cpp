@@ -24,6 +24,10 @@ bool ConfigManager::load(String path) {
         data.wifiAutoScan = wifi["auto_scan"] | true;
         data.wifiSaveHandshakes = wifi["save_handshakes"] | true;
         data.wifiDeauthReason = wifi["deauth_reason"] | 7;
+        const char* ssid = wifi["storage_ssid"] | "ESP-Chain-Files";
+        data.wifiStorageSSID = String(ssid);
+        const char* pass = wifi["storage_password"] | "password";
+        data.wifiStoragePassword = String(pass);
     }
 
     // BadUSB
@@ -57,6 +61,8 @@ bool ConfigManager::save(String path) {
     display["theme"] = data.displayTheme;
 
     JsonObject wifi = doc["wifi"];
+    wifi["storage_ssid"] = data.wifiStorageSSID;
+    wifi["storage_password"] = data.wifiStoragePassword;
     if (wifi.isNull()) wifi = doc.createNestedObject("wifi");
     wifi["auto_scan"] = data.wifiAutoScan;
     wifi["save_handshakes"] = data.wifiSaveHandshakes;

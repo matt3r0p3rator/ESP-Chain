@@ -28,6 +28,10 @@ public:
     String getName() override { 
         return "Settings"; 
     }
+    const unsigned char* getIcon() override { return image_menu_options_bits; }
+    int getIconWidth() override { return 14; }
+    int getIconHeight() override { return 16; }
+    int getIconOffsetY() override { return 1; }
     
     String getDescription() override { 
         return "Edit Config"; 
@@ -42,30 +46,35 @@ public:
             for (int i = 0; i < 5; i++) {
                 display->drawMenuItem(items[i], i, i == menuIndex);
             }
+            display->drawScrollBar(5, 0, 5);
         }
         else if (currentState == STATE_DISPLAY) {
             display->drawMenuItem("Bright: " + String(data.displayBrightness), 0, menuIndex == 0);
             String toStr = (data.displayTimeout == -1) ? "Always On" : String(data.displayTimeout) + "s";
             display->drawMenuItem("Timeout: " + toStr, 1, menuIndex == 1);
             display->drawMenuItem("Back", 2, menuIndex == 2);
+            display->drawScrollBar(3, 0, 5);
         }
         else if (currentState == STATE_WIFI) {
             display->drawMenuItem("AutoScan: " + getBoolStr(data.wifiAutoScan), 0, menuIndex == 0);
             display->drawMenuItem("SaveHS: " + getBoolStr(data.wifiSaveHandshakes), 1, menuIndex == 1);
             display->drawMenuItem("Reason: " + String(data.wifiDeauthReason), 2, menuIndex == 2);
             display->drawMenuItem("Back", 3, menuIndex == 3);
+            display->drawScrollBar(4, 0, 5);
         }
         else if (currentState == STATE_BADUSB) {
             display->drawMenuItem("Def Dly: " + String(data.badusbDelay) + "ms", 0, menuIndex == 0);
             display->drawMenuItem("Start Dly: " + String(data.badusbStartupDelay) + "ms", 1, menuIndex == 1);
             display->drawMenuItem("AutoExec: " + getBoolStr(data.badusbAutoExec), 2, menuIndex == 2);
             display->drawMenuItem("Back", 3, menuIndex == 3);
+            display->drawScrollBar(4, 0, 5);
         }
         else if (currentState == STATE_TIME) {
             display->drawMenuItem("Hour: " + String(editHour), 0, menuIndex == 0);
             display->drawMenuItem("Minute: " + String(editMinute), 1, menuIndex == 1);
             display->drawMenuItem("Save", 2, menuIndex == 2);
             display->drawMenuItem("Back", 3, menuIndex == 3);
+            display->drawScrollBar(4, 0, 5);
         }
     }
 

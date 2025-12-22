@@ -10,9 +10,18 @@ void MenuSystem::registerModule(Module* module) {
 }
 
 void MenuSystem::draw() {
+    // Check for background modules
+    bool wifiActive = false;
+    for (auto* mod : modules) {
+        if (mod->isBackgroundRunning()) {
+            wifiActive = true;
+            break;
+        }
+    }
+
     // Always draw status bar
     String statusText = inModule && activeModule ? activeModule->getName() : "Main Menu";
-    displayManager->drawStatusBar(statusText, displayManager->getBatteryVoltage(), sdManager->isMounted());
+    displayManager->drawStatusBar(statusText, displayManager->getBatteryVoltage(), sdManager->isMounted(), wifiActive);
 
     if (inModule && activeModule) {
         activeModule->drawMenu(displayManager);
@@ -25,8 +34,9 @@ void MenuSystem::draw() {
         if (end > modules.size()) end = modules.size();
 
         for (int i = start; i < end; i++) {
-            displayManager->drawMenuItem(modules[i]->getName(), i - scrollOffset, i == selectedIndex);
+            displayManager->drawMenuItem(modules[i]->getName(), i - scrollOffset, i == selectedIndex, modules[i]->getIcon(), modules[i]->getIconWidth(), modules[i]->getIconHeight(), modules[i]->getIconSpacing(), modules[i]->getIconOffsetY());
         }
+        displayManager->drawScrollBar(modules.size(), scrollOffset, itemsPerPage);
     }
 }
 
@@ -54,13 +64,23 @@ void MenuSystem::handleInput(uint8_t input) {
         case 1: // Down (Single Click)
             if (selectedIndex < modules.size() - 1) {
                 selectedIndex++;
-                if (selectedIndex >= scrollOffset + itemsPerPage) {
-                    scrollOffset++;
-                }
             } else {
                 selectedIndex = 0;
-                scrollOffset = 0;
             }
+
+            // Center selection
+            {
+                int halfPage = itemsPerPage / 2;
+                if (selectedIndex <= halfPage) {
+                    scrollOffset = 0;
+                } else if (selectedIndex >= (int)modules.size() - halfPage) {
+                    scrollOffset = (int)modules.size() - itemsPerPage;
+                } else {
+                    scrollOffset = selectedIndex - halfPage;
+                }
+                if (scrollOffset < 0) scrollOffset = 0;
+            }
+
             draw();
             break;
         case 2: // Select (Double Click)
@@ -103,8 +123,15 @@ void MenuSystem::update() {
     if (millis() - lastStatusUpdate > 30000) {
         lastStatusUpdate = millis();
         if (!isDeepSleepPending) {
+            bool wifiActive = false;
+            for (auto* mod : modules) {
+                if (mod->isBackgroundRunning()) {
+                    wifiActive = true;
+                    break;
+                }
+            }
             String statusText = inModule && activeModule ? activeModule->getName() : "Main Menu";
-            displayManager->drawStatusBar(statusText, displayManager->getBatteryVoltage(), sdManager->isMounted());
+            displayManager->drawStatusBar(statusText, displayManager->getBatteryVoltage(), sdManager->isMounted(), wifiActive);
         }
     }
 
@@ -130,6 +157,11 @@ void MenuSystem::update() {
 
     if (inModule && activeModule) {
         activeModule->loop();
+    }
+    
+    // Run background loops
+    for (auto* mod : modules) {
+        mod->backgroundLoop();
     }
 }
 
