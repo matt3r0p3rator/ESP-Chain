@@ -63,6 +63,13 @@ int BadUSBModule::getIconHeight() {
     return 16;
 }
 
+int BadUSBModule::getIconOffsetY() {
+    return 0;
+}
+int BadUSBModule::getIconSpacing() {
+    return 16;
+}
+
 String BadUSBModule::getDescription() {
     return "Run Ducky Scripts";
 }

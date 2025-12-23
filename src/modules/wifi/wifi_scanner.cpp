@@ -45,9 +45,11 @@ String WiFiModule::getName() {
     return "WiFi Tools";
 }
 
-const unsigned char* WiFiModule::getIcon() { return image_cloud_sync_bits; }
-int WiFiModule::getIconWidth() { return 17; }
+const unsigned char* WiFiModule::getIcon() { return image_wifi_bits; }
+int WiFiModule::getIconWidth() { return 19; }
 int WiFiModule::getIconHeight() { return 16; }
+int WiFiModule::getIconOffsetY() { return 0; }
+int WiFiModule::getIconSpacing() { return 13; }
 
 String WiFiModule::getDescription() {
     return "WiFi Tools";

@@ -10,10 +10,10 @@ DisplayManager::DisplayManager() {
 }
 
 void DisplayManager::init() {
-    // Power on the display (Pin 15)
+    // Power on the display/backlight (Pin 15)
     pinMode(15, OUTPUT);
     digitalWrite(15, HIGH);
-    
+
     // Battery Pin
     pinMode(PIN_BAT_VOLT, INPUT);
 
@@ -22,6 +22,15 @@ void DisplayManager::init() {
     tft->fillScreen(THEME_BG);
     tft->setTextSize(1);
     tft->setTextColor(THEME_TEXT, THEME_BG);
+    
+    // Setup PWM for backlight (Pin 38 as per TFT_BL, after TFT_eSPI init)
+    ledcSetup(0, 5000, 8); // Channel 0, 5kHz, 8-bit resolution
+    ledcAttachPin(38, 0);
+    ledcWrite(0, 128); // Default brightness
+}
+
+void DisplayManager::setBrightness(int brightness) {
+    ledcWrite(0, brightness);
 }
 
 void DisplayManager::initRTC() {
@@ -40,7 +49,7 @@ void DisplayManager::initRTC() {
 }
 
 void DisplayManager::turnOff() {
-    digitalWrite(15, LOW); // Turn off backlight
+    setBrightness(0); // Turn off backlight
     tft->writecommand(TFT_DISPOFF);
     tft->writecommand(TFT_SLPIN);
 }
@@ -92,6 +101,11 @@ void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, 
 float DisplayManager::getBatteryVoltage() {
     uint32_t raw = analogRead(PIN_BAT_VOLT);
     return (raw * 2.0 * 3.3) / 4096.0;
+}
+
+bool DisplayManager::isOnBattery() {
+    float voltage = getBatteryVoltage();
+    return voltage < 4.0;  // Adjust threshold if needed (e.g., < 4.5 for USB detection)
 }
 
 void DisplayManager::drawMenuTitle(String title) {

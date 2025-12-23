@@ -13,6 +13,7 @@ class DisplayManager {
 public:
     DisplayManager();
     void init();
+    void setBrightness(int brightness);
     void initRTC();
     void turnOff();
     void clear();
@@ -23,6 +24,7 @@ public:
     void updateClock();
     void drawScrollBar(int totalItems, int scrollOffset, int itemsPerPage);
     float getBatteryVoltage();
+    bool isOnBattery();
     void setTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second);
     DateTime getTime();
     TFT_eSPI* getTFT(); // Return pointer to allow null check if needed

@@ -181,9 +181,11 @@ void setup() {
         Serial.println("SD Card Initialized");
         if (ConfigManager::getInstance().load()) {
              Serial.println("Config Loaded");
+             displayManager.setBrightness(ConfigManager::getInstance().data.displayBrightness);
         } else {
              Serial.println("Config Load Failed or Missing. Creating defaults...");
              ConfigManager::getInstance().save();
+             displayManager.setBrightness(ConfigManager::getInstance().data.displayBrightness);
         }
     } else {
         Serial.println("SD Card Failed");

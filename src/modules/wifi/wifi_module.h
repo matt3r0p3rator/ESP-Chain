@@ -58,6 +58,8 @@ public:
     const unsigned char* getIcon() override;
     int getIconWidth() override;
     int getIconHeight() override;
+    int getIconOffsetY() override;
+    int getIconSpacing() override;
     String getDescription() override;
     void drawMenu(DisplayManager* display) override;
     bool handleInput(uint8_t button) override;

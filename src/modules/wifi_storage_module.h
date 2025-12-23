@@ -264,22 +264,22 @@ public:
         display->drawMenuTitle("WiFi Storage");
         
         display->getTFT()->setTextDatum(MC_DATUM);
-        display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK); 
+        display->getTFT()->setTextColor(THEME_TEXT, THEME_BG); 
         
         if (isRunning) {
-            display->getTFT()->setTextColor(TFT_GREEN, TFT_BLACK);
-            display->getTFT()->drawString("STATUS: RUNNING", 160, 60, 4);
-            display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
+            display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
+            display->getTFT()->drawString("STATUS: RUNNING", 20, 30, 2);
+            display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
             
-            display->getTFT()->drawString("AP: ESP-Chain-Files", 160, 90, 2);
-            display->getTFT()->drawString("Pass: password", 160, 110, 2);
-            display->getTFT()->drawString("IP: " + ipAddress, 160, 130, 4);
+            display->getTFT()->drawString("AP: ESP-Chain-Files", 20, 70, 2);
+            display->getTFT()->drawString("Pass: password", 20, 110, 2);
+            display->getTFT()->drawString("IP: " + ipAddress, 20, 130, 2);
             
             display->getTFT()->drawString("Btn 1: Stop", 160, 150, 2);
         } else {
-            display->getTFT()->setTextColor(TFT_RED, TFT_BLACK);
-            display->getTFT()->drawString("STATUS: STOPPED", 160, 60, 4);
-            display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
+            display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
+            display->getTFT()->drawString("STOPPED", 160, 60, 2);
+            display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
             
             display->getTFT()->drawString("Btn 1: Start", 160, 100, 2);
         }

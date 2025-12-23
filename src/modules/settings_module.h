@@ -116,6 +116,7 @@ public:
                 if (menuIndex == 0) { // Brightness
                     data.displayBrightness = (data.displayBrightness + 32);
                     if (data.displayBrightness > 255) data.displayBrightness = 32;
+                    displayManager.setBrightness(data.displayBrightness);
                 }
                 else if (menuIndex == 1) { // Timeout
                     if (data.displayTimeout == -1) data.displayTimeout = 10;
