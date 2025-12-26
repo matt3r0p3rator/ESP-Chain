@@ -9,9 +9,26 @@ void WiFiModule::init() {
     isScanning = false;
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
+    esp_log_level_set("wifi", ESP_LOG_NONE);
 }
 
 void WiFiModule::loop() {
+    extern DisplayManager displayManager;
+
+    if (isDeauthing) {
+        sendDeauthFrame();
+        delay(10); // Prevent watchdog trigger and allow other tasks
+    }
+
+    // Live update for attack screens
+    if (currentState == ATTACK_DEAUTH || currentState == HANDSHAKE_CAPTURE || currentState == ATTACK_MIXED || currentState == STATION_SCAN) {
+        static unsigned long lastDraw = 0;
+        if (millis() - lastDraw > 200) {
+            updateUI(&displayManager);
+            lastDraw = millis();
+        }
+    }
+
     if (isScanning) {
         int n = WiFi.scanComplete();
         if (n == -2) {
@@ -135,31 +152,65 @@ void WiFiModule::drawMenu(DisplayManager* display) {
             display->getTFT()->setTextDatum(TL_DATUM);
             display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
             
-            display->getTFT()->drawString("SSID: " + selectedTarget.ssid, 10, 40, 2);
-            display->getTFT()->drawString("BSSID: " + selectedTarget.bssid, 10, 60, 2);
-            display->getTFT()->drawString("CH: " + String(selectedTarget.channel), 10, 80, 2);
-            display->getTFT()->drawString("RSSI: " + String(selectedTarget.rssi), 10, 100, 2);
-            display->getTFT()->drawString("Enc: " + getEncryptionName(selectedTarget.encryption), 10, 120, 2);
+            // Moved up by 10 pixels
+            display->getTFT()->drawString("SSID: " + selectedTarget.ssid, 10, 30, 2);
+            display->getTFT()->drawString("BSSID: " + selectedTarget.bssid, 10, 50, 2);
+            display->getTFT()->drawString("CH: " + String(selectedTarget.channel), 10, 70, 2);
+            display->getTFT()->drawString("RSSI: " + String(selectedTarget.rssi), 10, 90, 2);
+            display->getTFT()->drawString("Enc: " + getEncryptionName(selectedTarget.encryption), 10, 110, 2);
             
             display->getTFT()->setTextDatum(MC_DATUM);
-            display->getTFT()->drawString("Double Click: Options", 160, 160, 2);
+            display->getTFT()->drawString("Double Click: Options", 160, 150, 2);
             break;
 
         case TARGET_OPTIONS:
             display->drawMenuTitle(selectedTarget.ssid);
-            display->drawMenuItem("Deauth Attack", 0, true); 
+            display->drawMenuItem("Deauth Attack", 0, menuIndex == 0); 
+            display->drawMenuItem("Capture Handshake", 1, menuIndex == 1);
+            display->drawMenuItem("Mixed Attack", 2, menuIndex == 2);
+            display->drawMenuItem("Scan Clients", 3, menuIndex == 3);
+            break;
+
+        case STATION_SCAN:
+            display->drawMenuTitle("Scanning Clients...");
+            display->getTFT()->setTextDatum(MC_DATUM);
+            display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
+            display->getTFT()->drawString("Found: " + String(detectedStations.size()), 160, 100, 4);
+            display->getTFT()->drawString("Double Click to List", 160, 140, 2);
+            display->getTFT()->fillCircle(160, 180, 5, (millis() / 500) % 2 == 0 ? TFT_GREEN : TFT_BLACK);
+            break;
+
+        case STATION_LIST:
+            if (detectedStations.empty()) {
+                display->drawMenuTitle("No Clients Found");
+                display->getTFT()->setTextDatum(MC_DATUM);
+                display->getTFT()->drawString("Go Back to Scan", 160, 100, 2);
+            } else {
+                display->drawMenuTitle("Select Client (" + String(detectedStations.size()) + ")");
+                int start = 0;
+                if (stationListIndex > 2) start = stationListIndex - 2;
+                if (start + 5 > (int)detectedStations.size()) start = detectedStations.size() - 5;
+                if (start < 0) start = 0;
+
+                for (int i = 0; i < 5 && (start + i) < (int)detectedStations.size(); i++) {
+                    int idx = start + i;
+                    String label = detectedStations[idx];
+                    if (label == selectedStation) label = "> " + label;
+                    display->drawMenuItem(label, i, idx == stationListIndex);
+                }
+            }
             break;
 
         case ATTACK_DEAUTH:
-            display->drawMenuTitle("Deauth Attack");
-            display->getTFT()->setTextDatum(MC_DATUM);
-            display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
-            display->getTFT()->drawString("Target:", 160, 60, 2);
-            display->getTFT()->drawString(selectedTarget.ssid, 160, 85, 4);
-            display->getTFT()->drawString("Sending Packets...", 160, 120, 2);
-            display->getTFT()->drawString("Long Press to Stop", 160, 150, 2);
-            
-            display->getTFT()->fillCircle(160, 180, 5, (millis() / 500) % 2 == 0 ? TFT_RED : TFT_BLACK);
+            drawTerminal(display);
+            break;
+
+        case HANDSHAKE_CAPTURE:
+            drawTerminal(display);
+            break;
+
+        case ATTACK_MIXED:
+            drawTerminal(display);
             break;
     }
 }
@@ -191,7 +242,23 @@ bool WiFiModule::handleInput(uint8_t button) {
                 currentState = DETAILS;
                 break;
             case ATTACK_DEAUTH:
+                stopDeauth();
                 currentState = TARGET_OPTIONS;
+                break;
+            case HANDSHAKE_CAPTURE:
+                stopHandshakeCapture();
+                currentState = TARGET_OPTIONS;
+                break;
+            case ATTACK_MIXED:
+                stopMixedAttack();
+                currentState = TARGET_OPTIONS;
+                break;
+            case STATION_SCAN:
+                stopStationScan();
+                currentState = TARGET_OPTIONS;
+                break;
+            case STATION_LIST:
+                currentState = STATION_SCAN; // Back to scanning
                 break;
             default:
                 currentState = MENU;
@@ -225,10 +292,24 @@ bool WiFiModule::handleInput(uint8_t button) {
                 // Maybe scroll details if too long? For now nothing.
                 break;
             case TARGET_OPTIONS:
-                // Only 1 option
+                menuIndex = (menuIndex + 1) % 4;
                 break;
             case ATTACK_DEAUTH:
                 // Do nothing
+                break;
+            case HANDSHAKE_CAPTURE:
+                // Do nothing
+                break;
+            case ATTACK_MIXED:
+                // Do nothing
+                break;
+            case STATION_SCAN:
+                // Do nothing
+                break;
+            case STATION_LIST:
+                if (!detectedStations.empty()) {
+                    stationListIndex = (stationListIndex + 1) % detectedStations.size();
+                }
                 break;
         }
         drawMenu(&displayManager);
@@ -277,18 +358,66 @@ bool WiFiModule::handleInput(uint8_t button) {
                 break;
             case DETAILS:
                 currentState = TARGET_OPTIONS;
+                menuIndex = 0;
+                selectedStation = ""; // Reset selected station
                 break;
             case TARGET_OPTIONS:
-                currentState = ATTACK_DEAUTH;
+                if (menuIndex == 0) {
+                    startDeauth();
+                    currentState = ATTACK_DEAUTH;
+                } else if (menuIndex == 1) {
+                    startHandshakeCapture();
+                    currentState = HANDSHAKE_CAPTURE;
+                } else if (menuIndex == 2) {
+                    startMixedAttack();
+                    currentState = ATTACK_MIXED;
+                } else if (menuIndex == 3) {
+                    startStationScan();
+                    currentState = STATION_SCAN;
+                }
                 break;
             case ATTACK_DEAUTH:
                 // Maybe toggle?
+                break;
+            case HANDSHAKE_CAPTURE:
+                break;
+            case ATTACK_MIXED:
+                break;
+            case STATION_SCAN:
+                currentState = STATION_LIST;
+                stationListIndex = 0;
+                break;
+            case STATION_LIST:
+                if (!detectedStations.empty()) {
+                    selectedStation = detectedStations[stationListIndex];
+                    currentState = TARGET_OPTIONS; // Go back to options with station selected
+                }
                 break;
         }
         drawMenu(&displayManager);
         return true;
     }
     return true;
+}
+
+void WiFiModule::updateUI(DisplayManager* display) {
+    switch (currentState) {
+        case ATTACK_DEAUTH:
+        case HANDSHAKE_CAPTURE:
+        case ATTACK_MIXED:
+            drawTerminalUpdate(display);
+            break;
+            
+        case STATION_SCAN:
+            display->getTFT()->setTextDatum(MC_DATUM);
+            display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
+            display->getTFT()->drawString("Found: " + String(detectedStations.size()), 160, 100, 4);
+            display->getTFT()->fillCircle(160, 180, 5, (millis() / 500) % 2 == 0 ? TFT_GREEN : TFT_BLACK);
+            break;
+            
+        default:
+            break;
+    }
 }
 
 void WiFiModule::performScan() {

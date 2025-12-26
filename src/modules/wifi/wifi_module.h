@@ -23,6 +23,10 @@ private:
         DETAILS,
         TARGET_OPTIONS,
         ATTACK_DEAUTH,
+        HANDSHAKE_CAPTURE,
+        ATTACK_MIXED,
+        STATION_SCAN,
+        STATION_LIST,
         SETTINGS,
         SETTINGS_SCAN_TIME,
         SETTINGS_SHOW_HIDDEN,
@@ -43,6 +47,19 @@ private:
     bool isScanning;
     unsigned long lastUpdate;
     
+    // Attack states
+    bool isDeauthing = false;
+    bool isCapturing = false;
+    bool isMixedAttack = false;
+    bool isScanningStations = false;
+    int deauthPacketsSent = 0;
+    int handshakesCaptured = 0;
+    
+    // Station scanning
+    std::vector<String> detectedStations;
+    String selectedStation = ""; // Empty means broadcast/all
+    int stationListIndex = 0;
+
     // Settings
     uint32_t scanTimePerChannel = 300;
     bool showHidden = true;
@@ -64,8 +81,28 @@ public:
     void drawMenu(DisplayManager* display) override;
     bool handleInput(uint8_t button) override;
 
+    // Attack methods
+    void startDeauth();
+    void stopDeauth();
+    void startHandshakeCapture();
+    void stopHandshakeCapture();
+    void startMixedAttack();
+    void stopMixedAttack();
+    void startStationScan();
+    void stopStationScan();
+    void updateUI(DisplayManager* display);
+    static void snifferCallback(void* buf, wifi_promiscuous_pkt_type_t type);
+
 private:
     void performScan();
     void sortResults();
     String getEncryptionName(wifi_auth_mode_t encryption);
+    void sendDeauthFrame();
+    void drawTerminal(DisplayManager* display);
+    void drawTerminalUpdate(DisplayManager* display);
+    
+    // PCAP
+    String pcapFileName;
+    void openPcapFile();
+    void savePacketToSD(uint8_t* buf, int len);
 };

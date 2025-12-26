@@ -18,7 +18,7 @@ public:
     void turnOff();
     void clear();
     void clearContent();
-    void drawStatusBar(String status, float voltage, bool sdStatus, bool wifiStatus, bool showClock = true, String replacement = "");
+    void drawStatusBar(String status, float voltage, bool sdStatus, bool wifiStatus, bool showClock = true, String replacement = "", bool forceRedraw = true);
     void drawMenuTitle(String title);
     void drawMenuItem(String text, int index, bool selected, const unsigned char* icon = nullptr, int iconWidth = 16, int iconHeight = 16, int iconSpacing = 8, int iconOffsetY = 0);
     void updateClock();

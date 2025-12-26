@@ -263,7 +263,7 @@ public:
         display->clearContent();
         display->drawMenuTitle("WiFi Storage");
         
-        display->getTFT()->setTextDatum(MC_DATUM);
+        display->getTFT()->setTextDatum(TL_DATUM);
         display->getTFT()->setTextColor(THEME_TEXT, THEME_BG); 
         
         if (isRunning) {
@@ -271,19 +271,19 @@ public:
             display->getTFT()->drawString("STATUS: RUNNING", 20, 30, 2);
             display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
             
-            display->getTFT()->drawString("AP: ESP-Chain-Files", 20, 70, 2);
-            display->getTFT()->drawString("Pass: password", 20, 110, 2);
-            display->getTFT()->drawString("IP: " + ipAddress, 20, 130, 2);
+            display->getTFT()->drawString("AP: ESP-Chain-Files", 20, 50, 2);
+            display->getTFT()->drawString("Pass: password", 20, 70, 2);
+            display->getTFT()->drawString("IP: " + ipAddress, 20, 90, 2);
             
-            display->getTFT()->drawString("Btn 1: Stop", 160, 150, 2);
+            display->getTFT()->drawString("Btn 1: Stop", 20, 110, 2);
         } else {
             display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
-            display->getTFT()->drawString("STOPPED", 160, 60, 2);
+            display->getTFT()->drawString("STOPPED", 20, 60, 2);
             display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
             
-            display->getTFT()->drawString("Btn 1: Start", 160, 100, 2);
+            display->getTFT()->drawString("Btn 1: Start", 20, 100, 2);
         }
-        display->getTFT()->drawString("Btn 3: Back", 160, 190, 2);
+        display->getTFT()->drawString("Btn 3: Back", 20, 190, 2);
     }
 
     bool handleInput(uint8_t button) override {

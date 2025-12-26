@@ -210,6 +210,8 @@ bool BadUSBModule::handleInput(uint8_t button) {
         }
     } else if (button == 3) { // Back
         if (currentPath == "/payloads") {
+            // Stop USB HID device
+            Keyboard.end();
             return false;
         } else {
             int lastSlash = currentPath.lastIndexOf('/');

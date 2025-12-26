@@ -109,19 +109,10 @@ void MenuSystem::handleInput(uint8_t input) {
 }
 
 void MenuSystem::update() {
-    // Update clock every second
-    static unsigned long lastClockUpdate = 0;
-    if (millis() - lastClockUpdate > 1000) { 
-        lastClockUpdate = millis();
-        if (!isDeepSleepPending) {
-            displayManager->updateClock();
-        }
-    }
-    
-    // Update full status bar (battery etc) every 30 seconds
-    static unsigned long lastStatusUpdate = 0;
-    if (millis() - lastStatusUpdate > 30000) {
-        lastStatusUpdate = millis();
+    // Update status bar (clock, battery, etc) every second
+    static unsigned long lastUpdate = 0;
+    if (millis() - lastUpdate > 1000) { 
+        lastUpdate = millis();
         if (!isDeepSleepPending) {
             bool wifiActive = false;
             for (auto* mod : modules) {
@@ -131,7 +122,8 @@ void MenuSystem::update() {
                 }
             }
             String statusText = inModule && activeModule ? activeModule->getName() : "Main Menu";
-            displayManager->drawStatusBar(statusText, displayManager->getBatteryVoltage(), sdManager->isMounted(), wifiActive);
+            // Update status bar without full redraw
+            displayManager->drawStatusBar(statusText, displayManager->getBatteryVoltage(), sdManager->isMounted(), wifiActive, true, "", false);
         }
     }
 
