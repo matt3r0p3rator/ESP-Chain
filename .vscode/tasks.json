@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Upload to Device",
+			"type": "shell",
+			"command": "platformio run --target upload --environment lilygo-t-display-s3"
+		}
+	]
+}

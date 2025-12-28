@@ -12,6 +12,7 @@ private:
     USBHIDKeyboard* _keyboard;
     int defaultDelay = 0;
     
+    void processMultiModifier(String line);
     void pressKey(String key);
     void pressCombination(String modifiers, String key);
     uint8_t getKeyCode(String key);

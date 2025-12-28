@@ -37,7 +37,7 @@ void DisplayManager::initRTC() {
     // Enable external power (Pin 17) for I2C devices
     pinMode(17, OUTPUT);
     digitalWrite(17, HIGH);
-    delay(100);
+    delay(500);
 
     Wire.begin(43, 44);
     if (!rtc.begin()) {
@@ -111,19 +111,19 @@ void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, 
     tft->fillRect(255, 2, 25, 16, THEME_SECONDARY);
     const unsigned char* batIcon = image_battery_full_bits;
     
-    if (voltage >= 4.25) {
+    if (voltage >= 4) {
         batIcon = image_battery_charging_bits;
     } else {
-        float percentage = (voltage - 3.3) / (4.2 - 3.3);
+        float percentage = (voltage - 3.3) / (3.8 - 3.4);
         if (percentage < 0) percentage = 0;
         if (percentage > 1) percentage = 1;
         
         if (percentage < 0.10) batIcon = image_battery_0_bits;
-        else if (percentage < 0.25) batIcon = image_battery_17_bits;
-        else if (percentage < 0.42) batIcon = image_battery_33_bits;
-        else if (percentage < 0.58) batIcon = image_battery_50_bits;
-        else if (percentage < 0.75) batIcon = image_battery_67_bits;
-        else if (percentage < 0.90) batIcon = image_battery_83_bits;
+        else if (percentage < 0.17) batIcon = image_battery_17_bits;
+        else if (percentage < 0.33) batIcon = image_battery_33_bits;
+        else if (percentage < 0.50) batIcon = image_battery_50_bits;
+        else if (percentage < 0.67) batIcon = image_battery_67_bits;
+        else if (percentage < 0.83) batIcon = image_battery_83_bits;
         else batIcon = image_battery_full_bits;
     }
     
