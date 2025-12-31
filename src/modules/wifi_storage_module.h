@@ -2,12 +2,14 @@
 #include "module_base.h"
 #include "display_manager.h"
 #include "sd_manager.h"
+#include "config_manager.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <SD.h>
 
 extern SDManager sdManager;
 extern DisplayManager displayManager;
+// extern ConfigManager configManager; // Removed global reference
 
 class WiFiStorageModule : public Module {
     WebServer* server = nullptr;
@@ -54,7 +56,7 @@ public:
         if (isRunning) return;
 
         WiFi.mode(WIFI_AP);
-        WiFi.softAP("ESP-Chain-Files", "password");
+        WiFi.softAP(ConfigManager::getInstance().data.wifiStorageSSID.c_str(), ConfigManager::getInstance().data.wifiStoragePassword.c_str());
         ipAddress = WiFi.softAPIP().toString();
 
         server = new WebServer(80);
@@ -271,8 +273,8 @@ public:
             display->getTFT()->drawString("STATUS: RUNNING", 20, 30, 2);
             display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
             
-            display->getTFT()->drawString("AP: ESP-Chain-Files", 20, 50, 2);
-            display->getTFT()->drawString("Pass: password", 20, 70, 2);
+            display->getTFT()->drawString("AP: " + ConfigManager::getInstance().data.wifiStorageSSID, 20, 50, 2);
+            display->getTFT()->drawString("Pass: " + ConfigManager::getInstance().data.wifiStoragePassword, 20, 70, 2);
             display->getTFT()->drawString("IP: " + ipAddress, 20, 90, 2);
             
             display->getTFT()->drawString("Btn 1: Stop", 20, 110, 2);

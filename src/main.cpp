@@ -12,6 +12,7 @@
 #include "modules/nrf24/nrf24_module.h"
 #include "modules/usb_storage_module.h"
 #include "modules/wifi_storage_module.h"
+#include "modules/firmare_upgrade_module.h"
 #include "badusb_module.h"
 #include "sd_manager.h"
 #include "config_manager.h"
@@ -112,7 +113,7 @@ public:
         display->getTFT()->setTextDatum(ML_DATUM);
         display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
         
-        display->getTFT()->drawString("ESP-Chain Matt3r FW beta v0", 20, 60, 2);
+        display->getTFT()->drawString("ESP-Chain Matt3r FW beta v1", 20, 60, 2);
         display->getTFT()->drawString("LilyGo T-Display S3", 20, 85, 2);
         display->getTFT()->drawString("Chip: ESP32-S3", 20, 110, 2);
         
@@ -147,6 +148,7 @@ I2CScannerModule i2cScannerModule;
 NRF24Module nrf24Module;
 USBStorageModule usbStorageModule;
 WiFiStorageModule wifiStorageModule;
+FirmwareUpgradeModule firmwareUpgradeModule;
 
 int PIN_EXT_POWER = 17;
 
@@ -209,6 +211,7 @@ void setup() {
     menuSystem.registerModule(&fileExplorerModule);
     menuSystem.registerModule(&usbStorageModule);
     menuSystem.registerModule(&wifiStorageModule);
+    menuSystem.registerModule(&firmwareUpgradeModule);
     menuSystem.registerModule(&sleepModule);
     menuSystem.registerModule(&settingsModule);
     menuSystem.registerModule(&i2cScannerModule);
