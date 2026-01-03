@@ -37,10 +37,11 @@ public:
         return "Play Games";
     }
 
-    const unsigned char* getIcon() override { 
-        // Use a generic icon or nullptr for now
-        return nullptr; 
-    }
+    const unsigned char* getIcon() override { return image_GameMode_bits; }
+    int getIconWidth() override { return 11; }
+    int getIconHeight() override { return 8; }
+    int getIconSpacing() override { return 20 ; }
+    int getIconOffsetY() override { return 0; }
 
     void drawMenu(DisplayManager* display) override {
         if (inGame && activeGame) {

@@ -6,6 +6,7 @@
 #include "module_base.h"
 #include "driver/rtc_io.h"
 #include "modules/wifi/wifi_module.h"
+#include "modules/ble/ble-module.h"
 #include "modules/counter_module.h" // 1. Include your new module header
 #include "modules/game_menu_module.h"
 #include "modules/file_explorer_module.h"
@@ -142,6 +143,7 @@ InputManager inputManager(&menuSystem);
 AboutModule aboutModule;
 SleepModule sleepModule;
 WiFiModule wifiModule;
+BLEModule bleModule;
 CounterModule counterModule;
 GameMenuModule gameMenuModule;
 FileExplorerModule fileExplorerModule;
@@ -293,6 +295,7 @@ void setup() {
     // The order here determines the order in the menu!
     // To move items, just cut and paste these lines.
     
+    menuSystem.registerModule(&bleModule);
     menuSystem.registerModule(&wifiModule);
     menuSystem.registerModule(&gameMenuModule);
     menuSystem.registerModule(&badusbModule);
