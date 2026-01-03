@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
-#include <Preferences.h>
+#include <ArduinoJson.h>
+#include "sd_manager.h"
 
 struct ConfigData {
     // Display
@@ -29,8 +30,8 @@ class ConfigManager {
 public:
     ConfigData data;
     
-    bool load();
-    bool save();
+    bool load(String path = "/config.json");
+    bool save(String path = "/config.json");
 
     static ConfigManager& getInstance() {
         static ConfigManager instance;
