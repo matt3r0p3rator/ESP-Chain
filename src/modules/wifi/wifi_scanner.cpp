@@ -41,6 +41,12 @@ void WiFiModule::loop() {
             // Start scan
             WiFi.scanNetworks(true, showHidden, false, scanTimePerChannel);
         } else if (n >= 0) {
+            // Save selected BSSID to maintain selection
+            String selectedBSSID = "";
+            if (!scanResults.empty() && selectedIndex >= 0 && selectedIndex < scanResults.size()) {
+                selectedBSSID = scanResults[selectedIndex].bssid;
+            }
+
             // Scan done, process results
             scanResults.clear();
             for (int i = 0; i < n; ++i) {
@@ -58,6 +64,26 @@ void WiFiModule::loop() {
             sortResults();
             WiFi.scanDelete();
             
+            // Restore selection
+            if (selectedBSSID != "") {
+                bool found = false;
+                for (int i = 0; i < scanResults.size(); i++) {
+                    if (scanResults[i].bssid == selectedBSSID) {
+                        selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) selectedIndex = 0;
+            } else {
+                selectedIndex = 0;
+            }
+            
+            // Update UI if we are in the results view
+            if (currentState == RESULTS) {
+                drawMenu(&displayManager);
+            }
+
             // Restart scan immediately
             WiFi.scanNetworks(true, showHidden, false, scanTimePerChannel);
         }
@@ -488,11 +514,13 @@ void WiFiModule::performScan() {
 void WiFiModule::sortResults() {
     if (sortMethod == SORT_RSSI) {
         std::sort(scanResults.begin(), scanResults.end(), [](const APInfo& a, const APInfo& b) {
-            return a.rssi > b.rssi; // Descending RSSI
+            if (a.rssi != b.rssi) return a.rssi > b.rssi; // Descending RSSI
+            return a.ssid < b.ssid; // Ascending SSID as tie breaker
         });
     } else {
         std::sort(scanResults.begin(), scanResults.end(), [](const APInfo& a, const APInfo& b) {
-            return a.channel < b.channel; // Ascending Channel
+            if (a.channel != b.channel) return a.channel < b.channel; // Ascending Channel
+            return a.rssi > b.rssi; // Descending RSSI as tie breaker
         });
     }
 }

