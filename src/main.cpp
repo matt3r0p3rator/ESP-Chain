@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "Preferences.h"
 #include "display_manager.h"
 #include "menu_system.h"
 #include "input_manager.h"
@@ -6,6 +7,7 @@
 #include "driver/rtc_io.h"
 #include "modules/wifi/wifi_module.h"
 #include "modules/counter_module.h" // 1. Include your new module header
+#include "modules/game_menu_module.h"
 #include "modules/file_explorer_module.h"
 #include "modules/settings_module.h"
 #include "modules/i2c_scanner_module.h"
@@ -141,6 +143,7 @@ AboutModule aboutModule;
 SleepModule sleepModule;
 WiFiModule wifiModule;
 CounterModule counterModule;
+GameMenuModule gameMenuModule;
 FileExplorerModule fileExplorerModule;
 SettingsModule settingsModule;
 BadUSBModule badusbModule;
@@ -152,11 +155,19 @@ FirmwareUpgradeModule firmwareUpgradeModule;
 
 int PIN_EXT_POWER = 17;
 
+Preferences preferences;
+
+
 void checkPin() {
-    const String CORRECT_PIN = "1223";
+    preferences.begin("security", false); // Read-only
+    const bool ENABLE_PIN_CHECK = preferences.getBool("enable_pin_check", false); 
+    const String CORRECT_PIN = preferences.getString("device_pin", "1234");
     String currentPin = "";
     int currentDigit = 0;
-    
+    if (!preferences.isKey("device_pin")) preferences.putString("device_pin", "1234"); // No valid PIN set
+    if (!preferences.isKey("enable_pin_check")) preferences.putBool("enable_pin_check", false); // Default to disabled
+    preferences.end();
+    if (!ENABLE_PIN_CHECK) return;
     pinMode(BTN_0, INPUT_PULLUP);
     pinMode(BTN_14, INPUT_PULLUP);
     
@@ -235,7 +246,7 @@ void setup() {
 
     // Initialize Display
     displayManager.init();
-    //checkPin();
+    checkPin();
     // displayManager.initRTC(); // Moved after power cycle
     displayManager.getTFT()->setTextDatum(MC_DATUM);
     displayManager.getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
@@ -286,6 +297,7 @@ void setup() {
     // To move items, just cut and paste these lines.
     
     menuSystem.registerModule(&wifiModule);
+    menuSystem.registerModule(&gameMenuModule);
     menuSystem.registerModule(&badusbModule);
     menuSystem.registerModule(&nrf24Module);
     menuSystem.registerModule(&fileExplorerModule);
