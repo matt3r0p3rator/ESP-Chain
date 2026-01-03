@@ -1,16 +1,24 @@
 #include "wifi_module.h"
 #include <algorithm>
 
+// ======================================================================================
+// WiFi Module Implementation
+// ======================================================================================
+
 void WiFiModule::init() {
     currentState = MENU;
     menuIndex = 0;
     selectedIndex = 0;
     settingsIndex = 0;
     isScanning = false;
+    lastScanTime = 0;
+    
+    // Initialize WiFi in Station mode
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     esp_log_level_set("wifi", ESP_LOG_NONE);
 
+    // Initialize Packet Queue for captures
     if (packetQueue == nullptr) {
         packetQueue = xQueueCreate(10, sizeof(CapturedPacket));
     }
@@ -19,15 +27,18 @@ void WiFiModule::init() {
 void WiFiModule::loop() {
     extern DisplayManager displayManager;
 
+    // 1. Process any captured packets (for handshake capture)
     processPacketQueue();
 
+    // 2. Handle Deauth Attack
     if (isDeauthing) {
         sendDeauthFrame();
-        delay(10); // Prevent watchdog trigger and allow other tasks
+        delay(10); // Yield to prevent watchdog
     }
 
-    // Live update for attack screens
-    if (currentState == ATTACK_DEAUTH || currentState == HANDSHAKE_CAPTURE || currentState == ATTACK_MIXED || currentState == STATION_SCAN) {
+    // 3. Update Attack UI (Live stats)
+    if (currentState == ATTACK_DEAUTH || currentState == HANDSHAKE_CAPTURE || 
+        currentState == ATTACK_MIXED || currentState == STATION_SCAN) {
         static unsigned long lastDraw = 0;
         if (millis() - lastDraw > 200) {
             updateUI(&displayManager);
@@ -35,58 +46,98 @@ void WiFiModule::loop() {
         }
     }
 
+    // 4. Handle Scanning Logic
     if (isScanning) {
         int n = WiFi.scanComplete();
+        
         if (n == -2) {
-            // Start scan
+            // Scan not started, start it
             WiFi.scanNetworks(true, showHidden, false, scanTimePerChannel);
+        } else if (n == -1) {
+            // Scan in progress, do nothing
         } else if (n >= 0) {
-            // Save selected BSSID to maintain selection
-            String selectedBSSID = "";
-            if (!scanResults.empty() && selectedIndex >= 0 && selectedIndex < scanResults.size()) {
-                selectedBSSID = scanResults[selectedIndex].bssid;
-            }
-
-            // Scan done, process results
-            scanResults.clear();
-            for (int i = 0; i < n; ++i) {
-                APInfo ap;
-                ap.ssid = WiFi.SSID(i);
-                if (ap.ssid.isEmpty() && !showHidden) continue; 
-                if (ap.ssid.isEmpty()) ap.ssid = "<HIDDEN>";
-                
-                ap.rssi = WiFi.RSSI(i);
-                ap.channel = WiFi.channel(i);
-                ap.bssid = WiFi.BSSIDstr(i);
-                ap.encryption = WiFi.encryptionType(i);
-                scanResults.push_back(ap);
-            }
-            sortResults();
+            // Scan completed
+            processScanResults(n);
             WiFi.scanDelete();
             
-            // Restore selection
-            if (selectedBSSID != "") {
-                bool found = false;
-                for (int i = 0; i < scanResults.size(); i++) {
-                    if (scanResults[i].bssid == selectedBSSID) {
-                        selectedIndex = i;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) selectedIndex = 0;
-            } else {
-                selectedIndex = 0;
-            }
+            // Restart scan immediately for continuous updates
+            WiFi.scanNetworks(true, showHidden, false, scanTimePerChannel);
             
-            // Update UI if we are in the results view
+            // If we are viewing results, refresh the display
             if (currentState == RESULTS) {
                 drawMenu(&displayManager);
             }
-
-            // Restart scan immediately
-            WiFi.scanNetworks(true, showHidden, false, scanTimePerChannel);
         }
+    }
+}
+
+void WiFiModule::processScanResults(int networksFound) {
+    unsigned long now = millis();
+    
+    // 1. Update existing networks and add new ones
+    for (int i = 0; i < networksFound; ++i) {
+        String ssid = WiFi.SSID(i);
+        if (ssid.isEmpty() && !showHidden) continue;
+        if (ssid.isEmpty()) ssid = "<HIDDEN>";
+        
+        String bssid = WiFi.BSSIDstr(i);
+        int32_t rssi = WiFi.RSSI(i);
+        uint8_t channel = WiFi.channel(i);
+        wifi_auth_mode_t encryption = WiFi.encryptionType(i);
+        
+        bool found = false;
+        for (auto& network : scanResults) {
+            if (network.bssid == bssid) {
+                // Update existing
+                network.ssid = ssid;
+                network.rssi = rssi;
+                network.channel = channel;
+                network.encryption = encryption;
+                network.lastSeen = now;
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            // Add new
+            APInfo newAP;
+            newAP.ssid = ssid;
+            newAP.bssid = bssid;
+            newAP.rssi = rssi;
+            newAP.channel = channel;
+            newAP.encryption = encryption;
+            newAP.lastSeen = now;
+            scanResults.push_back(newAP);
+        }
+    }
+    
+    // 2. Remove old networks (not seen in last 20 seconds)
+    // Using 20s to be very generous and prevent flickering
+    for (auto it = scanResults.begin(); it != scanResults.end(); ) {
+        if (now - it->lastSeen > 20000) {
+            it = scanResults.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    
+    // 3. Sort the list
+    sortResults();
+}
+
+void WiFiModule::sortResults() {
+    // Stable sort to prevent jumping
+    if (sortMethod == SORT_RSSI) {
+        std::sort(scanResults.begin(), scanResults.end(), [](const APInfo& a, const APInfo& b) {
+            if (a.rssi != b.rssi) return a.rssi > b.rssi; // Higher RSSI first
+            return a.ssid < b.ssid; // Alphabetical tie-breaker
+        });
+    } else {
+        std::sort(scanResults.begin(), scanResults.end(), [](const APInfo& a, const APInfo& b) {
+            if (a.channel != b.channel) return a.channel < b.channel; // Lower channel first
+            return a.rssi > b.rssi; // RSSI tie-breaker
+        });
     }
 }
 
@@ -101,7 +152,7 @@ int WiFiModule::getIconOffsetY() { return 0; }
 int WiFiModule::getIconSpacing() { return 13; }
 
 String WiFiModule::getDescription() {
-    return "WiFi Tools";
+    return "Scanner & Attacks";
 }
 
 void WiFiModule::drawMenu(DisplayManager* display) {
@@ -119,7 +170,6 @@ void WiFiModule::drawMenu(DisplayManager* display) {
             display->drawMenuItem(isScanning ? "Stop Scan" : "Start Scan", 0, menuIndex == 0);
             display->drawMenuItem("View Results", 1, menuIndex == 1);
             
-            // Show status
             if (isScanning) {
                 display->getTFT()->setTextDatum(MC_DATUM);
                 display->getTFT()->setTextColor(TFT_GREEN, THEME_BG);
@@ -147,14 +197,9 @@ void WiFiModule::drawMenu(DisplayManager* display) {
             display->getTFT()->drawString("Double: Save", 160, 160, 2);
             break;
 
-        case SETTINGS_SHOW_HIDDEN:
-            break;
-
-        case SETTINGS_SORT_METHOD:
-            break;
-
         case RESULTS:
             if (scanResults.empty()) {
+                display->drawMenuTitle("Results (0)");
                 display->getTFT()->setTextDatum(MC_DATUM);
                 display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
                 display->getTFT()->drawString("No Networks Found", 160, 100, 2);
@@ -163,17 +208,27 @@ void WiFiModule::drawMenu(DisplayManager* display) {
                 }
             } else {
                 display->drawMenuTitle("Results (" + String(scanResults.size()) + ")");
-                // Show 5 items centered around selectedIndex
+                
+                // Calculate visible range
+                int itemsPerPage = 5;
                 int start = 0;
-                if (selectedIndex > 2) start = selectedIndex - 2;
-                if (start + 5 > (int)scanResults.size()) start = scanResults.size() - 5;
+                
+                // Keep selected item in view
+                if (selectedIndex >= itemsPerPage) {
+                    start = selectedIndex - (itemsPerPage - 1);
+                }
                 if (start < 0) start = 0;
-
-                for (int i = 0; i < 5 && (start + i) < (int)scanResults.size(); i++) {
+                
+                // Draw items
+                for (int i = 0; i < itemsPerPage; i++) {
                     int idx = start + i;
-                    String label = scanResults[idx].ssid;
+                    if (idx >= scanResults.size()) break;
+                    
+                    APInfo& ap = scanResults[idx];
+                    String label = ap.ssid;
                     if (label.length() > 14) label = label.substring(0, 14) + "..";
-                    label += " (" + String(scanResults[idx].rssi) + ")";
+                    label += " (" + String(ap.rssi) + ")";
+                    
                     display->drawMenuItem(label, i, idx == selectedIndex);
                 }
             }
@@ -184,7 +239,6 @@ void WiFiModule::drawMenu(DisplayManager* display) {
             display->getTFT()->setTextDatum(TL_DATUM);
             display->getTFT()->setTextColor(THEME_TEXT, THEME_BG);
             
-            // Moved up by 10 pixels
             display->getTFT()->drawString("SSID: " + selectedTarget.ssid, 10, 30, 2);
             display->getTFT()->drawString("BSSID: " + selectedTarget.bssid, 10, 50, 2);
             display->getTFT()->drawString("CH: " + String(selectedTarget.channel), 10, 70, 2);
@@ -234,13 +288,7 @@ void WiFiModule::drawMenu(DisplayManager* display) {
             break;
 
         case ATTACK_DEAUTH:
-            drawTerminal(display);
-            break;
-
         case HANDSHAKE_CAPTURE:
-            drawTerminal(display);
-            break;
-
         case ATTACK_MIXED:
             drawTerminal(display);
             break;
@@ -250,19 +298,19 @@ void WiFiModule::drawMenu(DisplayManager* display) {
 bool WiFiModule::handleInput(uint8_t button) {
     extern DisplayManager displayManager;
 
-    if (button == 3) { // Back / Long Press
+    // Button 3: Back / Long Press
+    if (button == 3) {
         switch (currentState) {
             case MENU:
-                return false; 
+                return false; // Exit module
             case SCANNER_MENU:
                 currentState = MENU;
-                // Do NOT stop scanning here, user wants background scan
                 break;
             case SETTINGS:
                 currentState = MENU;
                 break;
             case SETTINGS_SCAN_TIME:
-                currentState = SETTINGS; 
+                currentState = SETTINGS;
                 break;
             case RESULTS:
                 currentState = SCANNER_MENU;
@@ -290,7 +338,7 @@ bool WiFiModule::handleInput(uint8_t button) {
                 currentState = TARGET_OPTIONS;
                 break;
             case STATION_LIST:
-                currentState = STATION_SCAN; // Back to scanning
+                currentState = STATION_SCAN;
                 break;
             default:
                 currentState = MENU;
@@ -300,66 +348,43 @@ bool WiFiModule::handleInput(uint8_t button) {
         return true;
     }
 
-    if (button == 0) { // Scroll Up
+    // Button 0: Scroll Up
+    if (button == 0) {
         switch (currentState) {
             case MENU:
-                if (menuIndex > 0) menuIndex--;
-                else menuIndex = 1;
-                break;
             case SCANNER_MENU:
-                if (menuIndex > 0) menuIndex--;
-                else menuIndex = 1;
+                menuIndex = (menuIndex > 0) ? menuIndex - 1 : 1;
                 break;
             case SETTINGS:
-                if (settingsIndex > 0) settingsIndex--;
-                else settingsIndex = 2;
+                settingsIndex = (settingsIndex > 0) ? settingsIndex - 1 : 2;
                 break;
             case SETTINGS_SCAN_TIME:
                 if (scanTimePerChannel > 100) scanTimePerChannel -= 100;
                 break;
-            case SETTINGS_SHOW_HIDDEN:
-                showHidden = !showHidden;
-                break;
-            case SETTINGS_SORT_METHOD:
-                sortMethod = (sortMethod == SORT_RSSI) ? SORT_CHANNEL : SORT_RSSI;
-                break;
             case RESULTS:
                 if (!scanResults.empty()) {
-                    if (selectedIndex > 0) selectedIndex--;
-                    else selectedIndex = scanResults.size() - 1;
+                    selectedIndex = (selectedIndex > 0) ? selectedIndex - 1 : scanResults.size() - 1;
                 }
                 break;
-            case DETAILS:
-                // Nothing to scroll
-                break;
             case TARGET_OPTIONS:
-                if (menuIndex > 0) menuIndex--;
-                else menuIndex = 3;
-                break;
-            case ATTACK_DEAUTH:
-                break;
-            case HANDSHAKE_CAPTURE:
-                break;
-            case ATTACK_MIXED:
-                break;
-            case STATION_SCAN:
+                menuIndex = (menuIndex > 0) ? menuIndex - 1 : 3;
                 break;
             case STATION_LIST:
                 if (!detectedStations.empty()) {
-                    if (stationListIndex > 0) stationListIndex--;
-                    else stationListIndex = detectedStations.size() - 1;
+                    stationListIndex = (stationListIndex > 0) ? stationListIndex - 1 : detectedStations.size() - 1;
                 }
+                break;
+            default:
                 break;
         }
         drawMenu(&displayManager);
         return true;
     }
 
-    if (button == 1) { // Scroll (Single Click)
+    // Button 1: Scroll Down (Single Click)
+    if (button == 1) {
         switch (currentState) {
             case MENU:
-                menuIndex = (menuIndex + 1) % 2; 
-                break;
             case SCANNER_MENU:
                 menuIndex = (menuIndex + 1) % 2;
                 break;
@@ -368,74 +393,57 @@ bool WiFiModule::handleInput(uint8_t button) {
                 break;
             case SETTINGS_SCAN_TIME:
                 scanTimePerChannel += 100;
-                if (scanTimePerChannel > 1000) scanTimePerChannel = 100; 
+                if (scanTimePerChannel > 1000) scanTimePerChannel = 100;
                 break;
             case RESULTS:
                 if (!scanResults.empty()) {
                     selectedIndex = (selectedIndex + 1) % scanResults.size();
                 }
                 break;
-            case DETAILS:
-                // Maybe scroll details if too long? For now nothing.
-                break;
             case TARGET_OPTIONS:
                 menuIndex = (menuIndex + 1) % 4;
-                break;
-            case ATTACK_DEAUTH:
-                // Do nothing
-                break;
-            case HANDSHAKE_CAPTURE:
-                // Do nothing
-                break;
-            case ATTACK_MIXED:
-                // Do nothing
-                break;
-            case STATION_SCAN:
-                // Do nothing
                 break;
             case STATION_LIST:
                 if (!detectedStations.empty()) {
                     stationListIndex = (stationListIndex + 1) % detectedStations.size();
                 }
                 break;
+            default:
+                break;
         }
         drawMenu(&displayManager);
         return true;
     }
 
-    if (button == 2) { // Select (Double Click)
+    // Button 2: Select (Double Click)
+    if (button == 2) {
         switch (currentState) {
             case MENU:
-                if (menuIndex == 0) { // Scanner
+                if (menuIndex == 0) {
                     currentState = SCANNER_MENU;
                     menuIndex = 0;
-                } else if (menuIndex == 1) { // Settings
+                } else {
                     currentState = SETTINGS;
                 }
                 break;
             case SCANNER_MENU:
-                if (menuIndex == 0) { // Start/Stop Scan
+                if (menuIndex == 0) {
                     isScanning = !isScanning;
                     if (!isScanning) {
-                        // Stop scan if possible?
-                        // WiFi.scanDelete(); // Maybe?
+                        WiFi.scanDelete();
                     }
-                } else if (menuIndex == 1) { // View Results
+                } else {
                     currentState = RESULTS;
                     selectedIndex = 0;
                 }
                 break;
             case SETTINGS:
-                if (settingsIndex == 0) {
-                    currentState = SETTINGS_SCAN_TIME;
-                } else if (settingsIndex == 1) {
-                    showHidden = !showHidden;
-                } else if (settingsIndex == 2) {
-                    sortMethod = (sortMethod == SORT_RSSI) ? SORT_CHANNEL : SORT_RSSI;
-                }
+                if (settingsIndex == 0) currentState = SETTINGS_SCAN_TIME;
+                else if (settingsIndex == 1) showHidden = !showHidden;
+                else if (settingsIndex == 2) sortMethod = (sortMethod == SORT_RSSI) ? SORT_CHANNEL : SORT_RSSI;
                 break;
             case SETTINGS_SCAN_TIME:
-                currentState = SETTINGS; 
+                currentState = SETTINGS;
                 break;
             case RESULTS:
                 if (!scanResults.empty()) {
@@ -446,7 +454,7 @@ bool WiFiModule::handleInput(uint8_t button) {
             case DETAILS:
                 currentState = TARGET_OPTIONS;
                 menuIndex = 0;
-                selectedStation = ""; // Reset selected station
+                selectedStation = "";
                 break;
             case TARGET_OPTIONS:
                 if (menuIndex == 0) {
@@ -463,13 +471,6 @@ bool WiFiModule::handleInput(uint8_t button) {
                     currentState = STATION_SCAN;
                 }
                 break;
-            case ATTACK_DEAUTH:
-                // Maybe toggle?
-                break;
-            case HANDSHAKE_CAPTURE:
-                break;
-            case ATTACK_MIXED:
-                break;
             case STATION_SCAN:
                 currentState = STATION_LIST;
                 stationListIndex = 0;
@@ -477,13 +478,16 @@ bool WiFiModule::handleInput(uint8_t button) {
             case STATION_LIST:
                 if (!detectedStations.empty()) {
                     selectedStation = detectedStations[stationListIndex];
-                    currentState = TARGET_OPTIONS; // Go back to options with station selected
+                    currentState = TARGET_OPTIONS;
                 }
+                break;
+            default:
                 break;
         }
         drawMenu(&displayManager);
         return true;
     }
+
     return true;
 }
 
@@ -504,24 +508,6 @@ void WiFiModule::updateUI(DisplayManager* display) {
             
         default:
             break;
-    }
-}
-
-void WiFiModule::performScan() {
-    // Deprecated, using async scan in loop
-}
-
-void WiFiModule::sortResults() {
-    if (sortMethod == SORT_RSSI) {
-        std::sort(scanResults.begin(), scanResults.end(), [](const APInfo& a, const APInfo& b) {
-            if (a.rssi != b.rssi) return a.rssi > b.rssi; // Descending RSSI
-            return a.ssid < b.ssid; // Ascending SSID as tie breaker
-        });
-    } else {
-        std::sort(scanResults.begin(), scanResults.end(), [](const APInfo& a, const APInfo& b) {
-            if (a.channel != b.channel) return a.channel < b.channel; // Ascending Channel
-            return a.rssi > b.rssi; // Descending RSSI as tie breaker
-        });
     }
 }
 

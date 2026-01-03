@@ -12,10 +12,40 @@ struct APInfo {
     uint8_t channel;
     String bssid;
     wifi_auth_mode_t encryption;
+    unsigned long lastSeen;
 };
 
 class WiFiModule : public Module {
+public:
+    // Module Interface
+    void init() override;
+    void loop() override;
+    String getName() override;
+    const unsigned char* getIcon() override;
+    int getIconWidth() override;
+    int getIconHeight() override;
+    int getIconOffsetY() override;
+    int getIconSpacing() override;
+    String getDescription() override;
+    void drawMenu(DisplayManager* display) override;
+    bool handleInput(uint8_t button) override;
+
+    // Attack / Sniffer Methods (Used by wifi_handshake_cap.cpp)
+    static void snifferCallback(void* buf, wifi_promiscuous_pkt_type_t type);
+    void startDeauth();
+    void stopDeauth();
+    void startHandshakeCapture();
+    void stopHandshakeCapture();
+    void startMixedAttack();
+    void stopMixedAttack();
+    void startStationScan();
+    void stopStationScan();
+    
+    // Helper for attack UI updates
+    void updateUI(DisplayManager* display);
+
 private:
+    // State Management
     enum State {
         MENU,
         SCANNER_MENU,
@@ -39,15 +69,21 @@ private:
     };
 
     State currentState;
-    std::vector<APInfo> scanResults;
-    int selectedIndex;
-    int menuIndex;
-    int settingsIndex;
-    APInfo selectedTarget;
-    bool isScanning;
-    unsigned long lastUpdate;
     
-    // Attack states
+    // Navigation
+    int menuIndex;
+    int selectedIndex;   // Index in the scanResults vector
+    int settingsIndex;
+    
+    // Scanner Data
+    std::vector<APInfo> scanResults;
+    bool isScanning;
+    unsigned long lastScanTime;
+    
+    // Selection
+    APInfo selectedTarget;
+
+    // Attack Data (Accessed by wifi_handshake_cap.cpp)
     bool isDeauthing = false;
     bool isCapturing = false;
     bool isMixedAttack = false;
@@ -65,38 +101,16 @@ private:
     bool showHidden = true;
     SortMethod sortMethod = SORT_RSSI;
 
+    // Menu Items
     const char* menuItems[2] = {"Scan Networks", "Settings"};
     const char* settingsItems[3] = {"Scan Time", "Show Hidden", "Sort By"};
 
-public:
-    void init() override;
-    void loop() override;
-    String getName() override;
-    const unsigned char* getIcon() override;
-    int getIconWidth() override;
-    int getIconHeight() override;
-    int getIconOffsetY() override;
-    int getIconSpacing() override;
-    String getDescription() override;
-    void drawMenu(DisplayManager* display) override;
-    bool handleInput(uint8_t button) override;
-
-    // Attack methods
-    void startDeauth();
-    void stopDeauth();
-    void startHandshakeCapture();
-    void stopHandshakeCapture();
-    void startMixedAttack();
-    void stopMixedAttack();
-    void startStationScan();
-    void stopStationScan();
-    void updateUI(DisplayManager* display);
-    static void snifferCallback(void* buf, wifi_promiscuous_pkt_type_t type);
-
-private:
-    void performScan();
+    // Internal Helpers
+    void processScanResults(int networksFound);
     void sortResults();
     String getEncryptionName(wifi_auth_mode_t encryption);
+    
+    // Attack Helpers (implemented in wifi_handshake_cap.cpp)
     void sendDeauthFrame();
     void drawTerminal(DisplayManager* display);
     void drawTerminalUpdate(DisplayManager* display);
