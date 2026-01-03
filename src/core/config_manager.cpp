@@ -1,93 +1,71 @@
 #include "config_manager.h"
 
-bool ConfigManager::load(String path) {
-    extern SDManager sdManager;
-    String json = sdManager.readFile(path);
-    if (json.length() == 0) return false;
+bool ConfigManager::load() {
+    Preferences prefs;
+    
+    // General Settings
+    if (prefs.begin("settings", true)) { // Read-only
+        // Display
+        data.displayBrightness = prefs.getInt("disp_bright", 128);
+        data.displayTimeout = prefs.getInt("disp_timeout", -1);
+        data.displayTheme = prefs.getString("disp_theme", "purple_black");
 
-    DynamicJsonDocument doc(2048);
-    DeserializationError error = deserializeJson(doc, json);
-    if (error) return false;
+        // WiFi
+        data.wifiAutoScan = prefs.getBool("wifi_autoscan", true);
+        data.wifiSaveHandshakes = prefs.getBool("wifi_savehs", true);
+        data.wifiDeauthReason = prefs.getInt("wifi_reason", 7);
+        data.wifiStorageSSID = prefs.getString("wifi_ssid", "ESP-Chain-Files");
+        data.wifiStoragePassword = prefs.getString("wifi_pass", "password");
 
-    // Display
-    if (doc.containsKey("display")) {
-        JsonObject display = doc["display"];
-        data.displayBrightness = display["brightness"] | 128;
-        data.displayTimeout = display["timeout_seconds"] | -1;
-        const char* theme = display["theme"] | "purple_black";
-        data.displayTheme = String(theme);
+        // BadUSB
+        data.badusbDelay = prefs.getInt("bad_delay", 100);
+        data.badusbStartupDelay = prefs.getInt("bad_startdly", 2000);
+        data.badusbAutoExec = prefs.getBool("bad_autoexec", false);
+        
+        prefs.end();
     }
 
-    // WiFi
-    if (doc.containsKey("wifi")) {
-        JsonObject wifi = doc["wifi"];
-        data.wifiAutoScan = wifi["auto_scan"] | true;
-        data.wifiSaveHandshakes = wifi["save_handshakes"] | true;
-        data.wifiDeauthReason = wifi["deauth_reason"] | 7;
-        const char* ssid = wifi["storage_ssid"] | "ESP-Chain-Files";
-        data.wifiStorageSSID = String(ssid);
-        const char* pass = wifi["storage_password"] | "password";
-        data.wifiStoragePassword = String(pass);
-    }
-
-    // BadUSB
-    if (doc.containsKey("badusb")) {
-        JsonObject badusb = doc["badusb"];
-        data.badusbDelay = badusb["default_delay_ms"] | 100;
-        data.badusbStartupDelay = badusb["startup_delay_ms"] | 2000;
-        data.badusbAutoExec = badusb["auto_execute"] | false;
-    }
-
-    // Security
-    if (doc.containsKey("security")) {
-        JsonObject security = doc["security"];
-        const char* pin = security["pin"] | "0000";
-        data.securityPin = String(pin);
-        data.securityLockOnBoot = security["lock_on_boot"] | false;
+    // Security Settings (match main.cpp)
+    if (prefs.begin("security", true)) {
+        data.securityPin = prefs.getString("device_pin", "0000");
+        data.securityLockOnBoot = prefs.getBool("enable_pin_check", false);
+        prefs.end();
     }
 
     return true;
 }
 
-bool ConfigManager::save(String path) {
-    extern SDManager sdManager;
+bool ConfigManager::save() {
+    Preferences prefs;
     
-    DynamicJsonDocument doc(2048);
-    
-    // Try to preserve existing structure
-    String currentJson = sdManager.readFile(path);
-    if (currentJson.length() > 0) {
-        deserializeJson(doc, currentJson);
+    // General Settings
+    if (prefs.begin("settings", false)) { // Read-write
+        // Display
+        prefs.putInt("disp_bright", data.displayBrightness);
+        prefs.putInt("disp_timeout", data.displayTimeout);
+        prefs.putString("disp_theme", data.displayTheme);
+
+        // WiFi
+        prefs.putBool("wifi_autoscan", data.wifiAutoScan);
+        prefs.putBool("wifi_savehs", data.wifiSaveHandshakes);
+        prefs.putInt("wifi_reason", data.wifiDeauthReason);
+        prefs.putString("wifi_ssid", data.wifiStorageSSID);
+        prefs.putString("wifi_pass", data.wifiStoragePassword);
+
+        // BadUSB
+        prefs.putInt("bad_delay", data.badusbDelay);
+        prefs.putInt("bad_startdly", data.badusbStartupDelay);
+        prefs.putBool("bad_autoexec", data.badusbAutoExec);
+        
+        prefs.end();
     }
 
-    // Update fields
-    // Note: createNestedObject will return existing object if it exists, or create new.
-    JsonObject display = doc["display"];
-    if (display.isNull()) display = doc.createNestedObject("display");
-    display["brightness"] = data.displayBrightness;
-    display["timeout_seconds"] = data.displayTimeout;
-    display["theme"] = data.displayTheme;
+    // Security Settings
+    if (prefs.begin("security", false)) {
+        prefs.putString("device_pin", data.securityPin);
+        prefs.putBool("enable_pin_check", data.securityLockOnBoot);
+        prefs.end();
+    }
 
-    JsonObject wifi = doc["wifi"];
-    wifi["storage_ssid"] = data.wifiStorageSSID;
-    wifi["storage_password"] = data.wifiStoragePassword;
-    if (wifi.isNull()) wifi = doc.createNestedObject("wifi");
-    wifi["auto_scan"] = data.wifiAutoScan;
-    wifi["save_handshakes"] = data.wifiSaveHandshakes;
-    wifi["deauth_reason"] = data.wifiDeauthReason;
-
-    JsonObject badusb = doc["badusb"];
-    if (badusb.isNull()) badusb = doc.createNestedObject("badusb");
-    badusb["default_delay_ms"] = data.badusbDelay;
-    badusb["startup_delay_ms"] = data.badusbStartupDelay;
-    badusb["auto_execute"] = data.badusbAutoExec;
-
-    JsonObject security = doc["security"];
-    if (security.isNull()) security = doc.createNestedObject("security");
-    security["pin"] = data.securityPin;
-    security["lock_on_boot"] = data.securityLockOnBoot;
-
-    String output;
-    serializeJsonPretty(doc, output);
-    return sdManager.writeFile(path, output);
+    return true;
 }

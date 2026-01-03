@@ -155,18 +155,14 @@ FirmwareUpgradeModule firmwareUpgradeModule;
 
 int PIN_EXT_POWER = 17;
 
-Preferences preferences;
-
-
 void checkPin() {
-    preferences.begin("security", false); // Read-only
-    const bool ENABLE_PIN_CHECK = preferences.getBool("enable_pin_check", false); 
-    const String CORRECT_PIN = preferences.getString("device_pin", "1234");
+    ConfigData& data = ConfigManager::getInstance().data;
+    const bool ENABLE_PIN_CHECK = data.securityLockOnBoot;
+    const String CORRECT_PIN = data.securityPin;
+    
     String currentPin = "";
     int currentDigit = 0;
-    if (!preferences.isKey("device_pin")) preferences.putString("device_pin", "1234"); // No valid PIN set
-    if (!preferences.isKey("enable_pin_check")) preferences.putBool("enable_pin_check", false); // Default to disabled
-    preferences.end();
+    
     if (!ENABLE_PIN_CHECK) return;
     pinMode(BTN_0, INPUT_PULLUP);
     pinMode(BTN_14, INPUT_PULLUP);
@@ -244,6 +240,14 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Starting ESP-Chain...");
 
+    // Load Config (Preferences)
+    if (ConfigManager::getInstance().load()) {
+         Serial.println("Config Loaded");
+    } else {
+         Serial.println("Config Load Failed or Missing. Creating defaults...");
+         ConfigManager::getInstance().save();
+    }
+
     // Initialize Display
     displayManager.init();
     checkPin();
@@ -268,18 +272,11 @@ void setup() {
     displayManager.drawStatusBar("Initializing...", displayManager.getBatteryVoltage(), false, false, true);
     displayManager.getTFT()->drawString("Initializing SD Card...", 160, 40, 2);
     
+    displayManager.setBrightness(ConfigManager::getInstance().data.displayBrightness);
 
     // Initialize SD Card
     if (sdManager.init()) {
         Serial.println("SD Card Initialized");
-        if (ConfigManager::getInstance().load()) {
-             Serial.println("Config Loaded");
-             displayManager.setBrightness(ConfigManager::getInstance().data.displayBrightness);
-        } else {
-             Serial.println("Config Load Failed or Missing. Creating defaults...");
-             ConfigManager::getInstance().save();
-             displayManager.setBrightness(ConfigManager::getInstance().data.displayBrightness);
-        }
     } else {
         Serial.println("SD Card Failed");
         displayManager.getTFT()->drawString("SD Card Failed", 160, 40, 2);
