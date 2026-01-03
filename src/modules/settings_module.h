@@ -6,11 +6,12 @@
 
 class SettingsModule : public Module {
 private:
-    enum State { STATE_MAIN, STATE_DISPLAY, STATE_WIFI, STATE_BADUSB, STATE_TIME };
+    enum State { STATE_MAIN, STATE_DISPLAY, STATE_WIFI, STATE_BADUSB, STATE_TIME, STATE_SECURITY, STATE_SECURITY_PIN };
     State currentState;
     int menuIndex;
     int editHour;
     int editMinute;
+    char tempPin[5];
     
     String getBoolStr(bool val) { 
         return val ? "ON" : "OFF"; 
@@ -42,11 +43,11 @@ public:
         ConfigData& data = ConfigManager::getInstance().data;
 
         if (currentState == STATE_MAIN) {
-            const char* items[] = {"Display", "WiFi", "BadUSB", "Time", "Save & Exit"};
-            for (int i = 0; i < 5; i++) {
+            const char* items[] = {"Display", "WiFi", "BadUSB", "Time", "Security", "Save & Exit"};
+            for (int i = 0; i < 6; i++) {
                 display->drawMenuItem(items[i], i, i == menuIndex);
             }
-            display->drawScrollBar(5, 0, 5);
+            display->drawScrollBar(6, 0, 6);
         }
         else if (currentState == STATE_DISPLAY) {
             display->drawMenuItem("Bright: " + String(data.displayBrightness), 0, menuIndex == 0);
@@ -75,6 +76,19 @@ public:
             display->drawMenuItem("Save", 2, menuIndex == 2);
             display->drawMenuItem("Back", 3, menuIndex == 3);
             display->drawScrollBar(4, 0, 5);
+        } else if (currentState == STATE_SECURITY) {
+            display->drawMenuItem("LockBoot: " + getBoolStr(data.securityLockOnBoot), 0, menuIndex == 0);
+            display->drawMenuItem("Edit PIN", 1, menuIndex == 1);
+            display->drawMenuItem("Back", 2, menuIndex == 2);
+            display->drawScrollBar(3, 0, 5);
+        } else if (currentState == STATE_SECURITY_PIN) {
+            display->drawMenuItem("Digit 1: " + String(tempPin[0]), 0, menuIndex == 0);
+            display->drawMenuItem("Digit 2: " + String(tempPin[1]), 1, menuIndex == 1);
+            display->drawMenuItem("Digit 3: " + String(tempPin[2]), 2, menuIndex == 2);
+            display->drawMenuItem("Digit 4: " + String(tempPin[3]), 3, menuIndex == 3);
+            display->drawMenuItem("Save", 4, menuIndex == 4);
+            display->drawMenuItem("Back", 5, menuIndex == 5);
+            display->drawScrollBar(6, 0, 6);
         }
     }
 
@@ -84,11 +98,13 @@ public:
 
         if (button == 0) { // Scroll Up
             int maxItems = 0;
-            if (currentState == STATE_MAIN) maxItems = 5;
+            if (currentState == STATE_MAIN) maxItems = 6;
             else if (currentState == STATE_DISPLAY) maxItems = 3;
             else if (currentState == STATE_WIFI) maxItems = 4;
             else if (currentState == STATE_BADUSB) maxItems = 4;
             else if (currentState == STATE_TIME) maxItems = 4;
+            else if (currentState == STATE_SECURITY) maxItems = 3;
+            else if (currentState == STATE_SECURITY_PIN) maxItems = 6;
             
             if (menuIndex > 0) menuIndex--;
             else menuIndex = maxItems - 1;
@@ -98,11 +114,13 @@ public:
 
         if (button == 1) { // Scroll
             int maxItems = 0;
-            if (currentState == STATE_MAIN) maxItems = 5;
+            if (currentState == STATE_MAIN) maxItems = 6;
             else if (currentState == STATE_DISPLAY) maxItems = 3;
             else if (currentState == STATE_WIFI) maxItems = 4;
             else if (currentState == STATE_BADUSB) maxItems = 4;
             else if (currentState == STATE_TIME) maxItems = 4;
+            else if (currentState == STATE_SECURITY) maxItems = 3;
+            else if (currentState == STATE_SECURITY_PIN) maxItems = 6;
             
             menuIndex = (menuIndex + 1) % maxItems;
             drawMenu(&displayManager);
@@ -122,6 +140,10 @@ public:
                     editMinute = now.minute();
                 }
                 else if (menuIndex == 4) { 
+                    currentState = STATE_SECURITY;
+                    menuIndex = 0;
+                }
+                else if (menuIndex == 5) { 
                     ConfigManager::getInstance().save(); 
                     return false; // Exit module
                 }
@@ -179,6 +201,41 @@ public:
                 else if (menuIndex == 3) { // Back
                     currentState = STATE_MAIN;
                     menuIndex = 3;
+                }
+            }
+            else if (currentState == STATE_SECURITY) {
+                if (menuIndex == 0) { // LockBoot
+                    data.securityLockOnBoot = !data.securityLockOnBoot;
+                }
+                else if (menuIndex == 1) { // Edit PIN
+                    currentState = STATE_SECURITY_PIN;
+                    menuIndex = 0;
+                    // Load current PIN into tempPin
+                    String p = data.securityPin;
+                    while(p.length() < 4) p += "0";
+                    for(int i=0; i<4; i++) tempPin[i] = p[i];
+                    tempPin[4] = '\0';
+                }
+                else if (menuIndex == 2) { // Back
+                    currentState = STATE_MAIN;
+                    menuIndex = 4;
+                }
+            }
+            else if (currentState == STATE_SECURITY_PIN) {
+                if (menuIndex >= 0 && menuIndex < 4) { // Edit Digit
+                    char c = tempPin[menuIndex];
+                    c++;
+                    if (c > '9') c = '0';
+                    tempPin[menuIndex] = c;
+                }
+                else if (menuIndex == 4) { // Save
+                    data.securityPin = String(tempPin);
+                    currentState = STATE_SECURITY;
+                    menuIndex = 1;
+                }
+                else if (menuIndex == 5) { // Back
+                    currentState = STATE_SECURITY;
+                    menuIndex = 1;
                 }
             }
             drawMenu(&displayManager);

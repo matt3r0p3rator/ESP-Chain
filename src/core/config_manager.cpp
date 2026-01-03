@@ -38,6 +38,14 @@ bool ConfigManager::load(String path) {
         data.badusbAutoExec = badusb["auto_execute"] | false;
     }
 
+    // Security
+    if (doc.containsKey("security")) {
+        JsonObject security = doc["security"];
+        const char* pin = security["pin"] | "0000";
+        data.securityPin = String(pin);
+        data.securityLockOnBoot = security["lock_on_boot"] | false;
+    }
+
     return true;
 }
 
@@ -73,6 +81,11 @@ bool ConfigManager::save(String path) {
     badusb["default_delay_ms"] = data.badusbDelay;
     badusb["startup_delay_ms"] = data.badusbStartupDelay;
     badusb["auto_execute"] = data.badusbAutoExec;
+
+    JsonObject security = doc["security"];
+    if (security.isNull()) security = doc.createNestedObject("security");
+    security["pin"] = data.securityPin;
+    security["lock_on_boot"] = data.securityLockOnBoot;
 
     String output;
     serializeJsonPretty(doc, output);

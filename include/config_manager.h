@@ -20,6 +20,10 @@ struct ConfigData {
     int badusbDelay = 100;
     int badusbStartupDelay = 2000; // Delay before running payload after arming/plugin
     bool badusbAutoExec = false;
+
+    // Security
+    String securityPin = "0000";
+    bool securityLockOnBoot = false;
 };
 
 class ConfigManager {
