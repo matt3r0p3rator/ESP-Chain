@@ -10,10 +10,16 @@ void WiFiModule::init() {
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     esp_log_level_set("wifi", ESP_LOG_NONE);
+
+    if (packetQueue == nullptr) {
+        packetQueue = xQueueCreate(10, sizeof(CapturedPacket));
+    }
 }
 
 void WiFiModule::loop() {
     extern DisplayManager displayManager;
+
+    processPacketQueue();
 
     if (isDeauthing) {
         sendDeauthFrame();
@@ -262,6 +268,61 @@ bool WiFiModule::handleInput(uint8_t button) {
                 break;
             default:
                 currentState = MENU;
+                break;
+        }
+        drawMenu(&displayManager);
+        return true;
+    }
+
+    if (button == 0) { // Scroll Up
+        switch (currentState) {
+            case MENU:
+                if (menuIndex > 0) menuIndex--;
+                else menuIndex = 1;
+                break;
+            case SCANNER_MENU:
+                if (menuIndex > 0) menuIndex--;
+                else menuIndex = 1;
+                break;
+            case SETTINGS:
+                if (settingsIndex > 0) settingsIndex--;
+                else settingsIndex = 2;
+                break;
+            case SETTINGS_SCAN_TIME:
+                if (scanTimePerChannel > 100) scanTimePerChannel -= 100;
+                break;
+            case SETTINGS_SHOW_HIDDEN:
+                showHidden = !showHidden;
+                break;
+            case SETTINGS_SORT_METHOD:
+                sortMethod = (sortMethod == SORT_RSSI) ? SORT_CHANNEL : SORT_RSSI;
+                break;
+            case RESULTS:
+                if (!scanResults.empty()) {
+                    if (selectedIndex > 0) selectedIndex--;
+                    else selectedIndex = scanResults.size() - 1;
+                }
+                break;
+            case DETAILS:
+                // Nothing to scroll
+                break;
+            case TARGET_OPTIONS:
+                if (menuIndex > 0) menuIndex--;
+                else menuIndex = 3;
+                break;
+            case ATTACK_DEAUTH:
+                break;
+            case HANDSHAKE_CAPTURE:
+                break;
+            case ATTACK_MIXED:
+                break;
+            case STATION_SCAN:
+                break;
+            case STATION_LIST:
+                if (!detectedStations.empty()) {
+                    if (stationListIndex > 0) stationListIndex--;
+                    else stationListIndex = detectedStations.size() - 1;
+                }
                 break;
         }
         drawMenu(&displayManager);

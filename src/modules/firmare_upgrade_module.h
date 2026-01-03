@@ -166,13 +166,27 @@ public:
         if (isUpdating) return true;
         if (statusMessage == "Success! Rebooting...") return true;
 
-        if (button == 1) { // Next
+        extern DisplayManager displayManager;
+
+        if (button == 0) { // Up
+            if (!firmwareFiles.empty()) {
+                if (selectedIndex > 0) selectedIndex--;
+                else selectedIndex = firmwareFiles.size() - 1;
+                drawMenu(&displayManager);
+            }
+        } else if (button == 1) { // Next
             if (!firmwareFiles.empty()) {
                 selectedIndex = (selectedIndex + 1) % firmwareFiles.size();
+                drawMenu(&displayManager);
             }
         } else if (button == 2) { // Select
             if (!firmwareFiles.empty()) {
+                isUpdating = true;
+                statusMessage = "Updating...";
+                drawMenu(&displayManager);
+                delay(100);
                 performUpdate(firmwareFiles[selectedIndex].name);
+                drawMenu(&displayManager);
             }
         } else if (button == 3) { // Back
             return false;

@@ -152,13 +152,91 @@ FirmwareUpgradeModule firmwareUpgradeModule;
 
 int PIN_EXT_POWER = 17;
 
+void checkPin() {
+    const String CORRECT_PIN = "1223";
+    String currentPin = "";
+    int currentDigit = 0;
+    
+    pinMode(BTN_0, INPUT_PULLUP);
+    pinMode(BTN_14, INPUT_PULLUP);
+    
+    while (true) {
+        displayManager.clearContent();
+        displayManager.drawMenuTitle("Security Check");
+        
+        displayManager.getTFT()->setTextDatum(MC_DATUM);
+        displayManager.getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
+        displayManager.getTFT()->drawString("Enter PIN", 160, 60, 4);
+        
+        String pinDisplay = "";
+        for (int i = 0; i < 4; i++) {
+            if (i < currentPin.length()) {
+                pinDisplay += "* ";
+            } else if (i == currentPin.length()) {
+                pinDisplay += String(currentDigit) + " ";
+            } else {
+                pinDisplay += "_ ";
+            }
+        }
+        displayManager.getTFT()->drawString(pinDisplay, 160, 100, 4);
+        
+        displayManager.getTFT()->drawString("Btn 0: Change", 160, 140, 2);
+        displayManager.getTFT()->drawString("Btn 14: Select", 160, 160, 2);
+
+        bool btn0Pressed = false;
+        bool btn14Pressed = false;
+        
+        while (!btn0Pressed && !btn14Pressed) {
+            if (digitalRead(BTN_0) == LOW) {
+                delay(50);
+                if (digitalRead(BTN_0) == LOW) {
+                    btn0Pressed = true;
+                    while(digitalRead(BTN_0) == LOW);
+                }
+            }
+            if (digitalRead(BTN_14) == LOW) {
+                delay(50);
+                if (digitalRead(BTN_14) == LOW) {
+                    btn14Pressed = true;
+                    while(digitalRead(BTN_14) == LOW);
+                }
+            }
+            delay(10);
+        }
+        
+        if (btn0Pressed) {
+            currentDigit = (currentDigit + 1) % 10;
+        } else if (btn14Pressed) {
+            currentPin += String(currentDigit);
+            currentDigit = 0;
+            
+            if (currentPin.length() == 4) {
+                if (currentPin == CORRECT_PIN) {
+                    displayManager.clearContent();
+                    displayManager.getTFT()->drawString("Access Granted", 160, 85, 4);
+                    delay(1000);
+                    return;
+                } else {
+                    displayManager.clearContent();
+                    displayManager.getTFT()->setTextColor(TFT_RED, TFT_BLACK);
+                    displayManager.getTFT()->drawString("Access Denied", 160, 85, 4);
+                    delay(1000);
+                    currentPin = "";
+                    currentDigit = 0;
+                }
+            }
+        }
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     Serial.println("Starting ESP-Chain...");
 
     // Initialize Display
     displayManager.init();
-    displayManager.initRTC();
+    //checkPin();
+    // displayManager.initRTC(); // Moved after power cycle
     displayManager.getTFT()->setTextDatum(MC_DATUM);
     displayManager.getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
     displayManager.drawStatusBar("Booting...", displayManager.getBatteryVoltage(), false, false, false, "ESP-Chain");
@@ -169,6 +247,8 @@ void setup() {
     digitalWrite(PIN_EXT_POWER, LOW);
     delay(250);
     digitalWrite(PIN_EXT_POWER, HIGH); // Turn ON NPN
+
+    displayManager.initRTC(); // Initialize RTC after power cycle
 
     displayManager.getTFT()->drawString("Wait for External Power", 160, 40, 2);
     delay(700); // Wait for SPI devices to power up

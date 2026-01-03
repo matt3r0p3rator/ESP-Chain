@@ -59,7 +59,27 @@ void MenuSystem::handleInput(uint8_t input) {
 
     // Main Menu Navigation
     switch (input) {
-        case 0: // Up (Not used)
+        case 0: // Up
+            if (selectedIndex > 0) {
+                selectedIndex--;
+            } else {
+                selectedIndex = modules.size() - 1;
+            }
+
+            // Center selection
+            {
+                int halfPage = itemsPerPage / 2;
+                if (selectedIndex <= halfPage) {
+                    scrollOffset = 0;
+                } else if (selectedIndex >= (int)modules.size() - halfPage) {
+                    scrollOffset = (int)modules.size() - itemsPerPage;
+                } else {
+                    scrollOffset = selectedIndex - halfPage;
+                }
+                if (scrollOffset < 0) scrollOffset = 0;
+            }
+
+            draw();
             break;
         case 1: // Down (Single Click)
             if (selectedIndex < modules.size() - 1) {

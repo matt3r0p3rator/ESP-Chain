@@ -105,4 +105,12 @@ private:
     String pcapFileName;
     void openPcapFile();
     void savePacketToSD(uint8_t* buf, int len);
+
+    // Packet Queue
+    struct CapturedPacket {
+        uint8_t data[512];
+        int len;
+    };
+    QueueHandle_t packetQueue;
+    void processPacketQueue();
 };

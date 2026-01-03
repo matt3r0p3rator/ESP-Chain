@@ -158,7 +158,12 @@ public:
                     startScan();
                 }
             } else {
-                if (button == 1) { // Down / Next
+                if (button == 0) { // Up
+                    if (selectedIndex > 0) selectedIndex--;
+                    else selectedIndex = devices.size() - 1;
+                    drawMenu(&displayManager);
+                }
+                else if (button == 1) { // Down / Next
                     selectedIndex++;
                     if (selectedIndex >= devices.size()) selectedIndex = 0;
                     drawMenu(&displayManager);

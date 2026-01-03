@@ -1,0 +1,6 @@
+REM Linux Open Files (Gnome/Ubuntu)
+DELAY 1000
+ALT F2
+DELAY 500
+STRING xdg-open http://192.168.4.1/
+ENTER

@@ -155,6 +155,29 @@ public:
             return true;
         }
 
+        if (button == 0) { // Scroll Up
+            switch (currentState) {
+                case MENU:
+                    if (menuIndex > 0) menuIndex--;
+                    else menuIndex = 3;
+                    break;
+                case SCANNER:
+                    if (menuIndex > 0) menuIndex--;
+                    else menuIndex = 1;
+                    break;
+                case VIEW_RESULTS:
+                    if (!scanResults.empty()) {
+                        if (selectedIndex > 0) selectedIndex--;
+                        else selectedIndex = scanResults.size() - 1;
+                    }
+                    break;
+                default:
+                    break;
+            }
+            drawMenu(&displayManager);
+            return true;
+        }
+
         if (button == 1) { // Scroll (Single Click)
             switch (currentState) {
                 case MENU:

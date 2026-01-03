@@ -162,22 +162,8 @@ void WiFiModule::snifferCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
     uint8_t* data = pkt->payload;
     int len = pkt->rx_ctrl.sig_len;
     
-    // Check for EAPOL packet (EtherType 0x888E)
-    // IEEE 802.11 data frame structure is complex, simplified check:
-    // We look for the EAPOL header pattern in the payload
-    
-    // This is a simplified check. A robust implementation would parse the 802.11 header.
-    // EAPOL usually follows the LLC/SNAP header.
-    
     // Station Sniffing Logic
     if (wifiModuleInstance && wifiModuleInstance->isScanningStations) {
-        // Check for Data frames (Type 2, Subtype 0 or 8)
-        // Frame Control (2 bytes) | Duration (2) | Addr1 (6) | Addr2 (6) | Addr3 (6)
-        // Addr1: Receiver, Addr2: Transmitter, Addr3: BSSID (usually)
-        
-        // We want packets where either Addr1 or Addr2 matches our target BSSID
-        // The other address is likely the station
-        
         if (len > 24) {
             char addr1[18], addr2[18];
             sprintf(addr1, "%02x:%02x:%02x:%02x:%02x:%02x", 
@@ -209,14 +195,29 @@ void WiFiModule::snifferCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
         }
     }
 
-    for (int i = 0; i < len - 4; i++) {
-        if (data[i] == 0x88 && data[i+1] == 0x8E) { // EtherType EAPOL
-             if (wifiModuleInstance) {
-                 wifiModuleInstance->handshakesCaptured++;
-                 wifiModuleInstance->savePacketToSD(data, len);
-             }
-             break;
+    // EAPOL Detection
+    // Look for LLC/SNAP header: AA AA 03 00 00 00 88 8E
+    bool isEAPOL = false;
+    // Start searching from byte 24 (min header size)
+    for (int i = 24; i < len - 8; i++) {
+        if (data[i] == 0xAA && data[i+1] == 0xAA && data[i+2] == 0x03 &&
+            data[i+3] == 0x00 && data[i+4] == 0x00 && data[i+5] == 0x00 &&
+            data[i+6] == 0x88 && data[i+7] == 0x8E) {
+            isEAPOL = true;
+            break;
         }
+    }
+
+    if (isEAPOL) {
+         if (wifiModuleInstance && wifiModuleInstance->packetQueue) {
+             wifiModuleInstance->handshakesCaptured++;
+             
+             CapturedPacket packet;
+             packet.len = (len > 512) ? 512 : len;
+             memcpy(packet.data, data, packet.len);
+             
+             xQueueSendFromISR(wifiModuleInstance->packetQueue, &packet, NULL);
+         }
     }
 }
 
@@ -262,12 +263,12 @@ void WiFiModule::drawTerminal(DisplayManager* display) {
     
     if (isDeauthing) {
         display->getTFT()->drawString("Deauth Pkts:", 10, yDeauth, 2);
-        display->getTFT()->drawString(String(deauthPacketsSent), 120, yDeauth, 4);
+        display->getTFT()->drawString(String(deauthPacketsSent), 120, yDeauth, 3);
     }
     
     if (isCapturing) {
         display->getTFT()->drawString("Handshakes:", 10, yHandshake, 2);
-        display->getTFT()->drawString(String(handshakesCaptured), 120, yHandshake, 4);
+        display->getTFT()->drawString(String(handshakesCaptured), 120, yHandshake, 3);
     }
     
     // Status indicator
@@ -292,12 +293,12 @@ void WiFiModule::drawTerminalUpdate(DisplayManager* display) {
     
     if (isDeauthing) {
         // Update Deauth Pkts count
-        display->getTFT()->drawString(String(deauthPacketsSent), 120, yDeauth, 4);
+        display->getTFT()->drawString(String(deauthPacketsSent), 120, yDeauth, 2);
     }
     
     if (isCapturing) {
         // Update Handshakes count
-        display->getTFT()->drawString(String(handshakesCaptured), 120, yHandshake, 4);
+        display->getTFT()->drawString(String(handshakesCaptured), 120, yHandshake, 2);
     }
     
     // Status indicator
@@ -358,5 +359,14 @@ void WiFiModule::savePacketToSD(uint8_t* buf, int len) {
         pcapFile.write((uint8_t*)&packetHeader, sizeof(packetHeader));
         pcapFile.write(buf, len);
         pcapFile.close();
+    }
+}
+
+void WiFiModule::processPacketQueue() {
+    if (packetQueue == nullptr) return;
+    
+    CapturedPacket packet;
+    while (xQueueReceive(packetQueue, &packet, 0) == pdTRUE) {
+        savePacketToSD(packet.data, packet.len);
     }
 }

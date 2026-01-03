@@ -46,14 +46,20 @@ public:
         
         if (button == 3) return false; // Long Press -> Exit
         
-        if (button == 1) { // Single Click
+        if (button == 0) { // Up -> Increment
             counter++;
             drawMenu(&displayManager);
             return true;
         }
-        
-        if (button == 2) { // Double Click
+
+        if (button == 1) { // Down -> Decrement
             counter--;
+            drawMenu(&displayManager);
+            return true;
+        }
+        
+        if (button == 2) { // Select -> Reset
+            counter = 0;
             drawMenu(&displayManager);
             return true;
         }

@@ -82,6 +82,20 @@ public:
         extern DisplayManager displayManager;
         ConfigData& data = ConfigManager::getInstance().data;
 
+        if (button == 0) { // Scroll Up
+            int maxItems = 0;
+            if (currentState == STATE_MAIN) maxItems = 5;
+            else if (currentState == STATE_DISPLAY) maxItems = 3;
+            else if (currentState == STATE_WIFI) maxItems = 4;
+            else if (currentState == STATE_BADUSB) maxItems = 4;
+            else if (currentState == STATE_TIME) maxItems = 4;
+            
+            if (menuIndex > 0) menuIndex--;
+            else menuIndex = maxItems - 1;
+            drawMenu(&displayManager);
+            return true;
+        }
+
         if (button == 1) { // Scroll
             int maxItems = 0;
             if (currentState == STATE_MAIN) maxItems = 5;

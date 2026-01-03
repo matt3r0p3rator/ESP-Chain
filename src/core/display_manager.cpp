@@ -37,14 +37,21 @@ void DisplayManager::initRTC() {
     // Enable external power (Pin 17) for I2C devices
     pinMode(17, OUTPUT);
     digitalWrite(17, HIGH);
-    delay(500);
+    delay(1000);
 
     Wire.begin(43, 44);
-    if (!rtc.begin()) {
+    
+    for (int i = 0; i < 3; i++) {
+        if (rtc.begin()) {
+            rtcInitialized = true;
+            break;
+        }
+        Serial.println("Couldn't find RTC, retrying...");
+        delay(500);
+    }
+
+    if (!rtcInitialized) {
         Serial.println("Couldn't find RTC");
-        rtcInitialized = false;
-    } else {
-        rtcInitialized = true;
     }
 }
 

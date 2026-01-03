@@ -127,6 +127,18 @@ public:
                 drawMenu(&displayManager);
                 return true;
             }
+            if (button == 0) { // Scroll Up
+                if (viewerScrollIndex > 0) viewerScrollIndex--;
+                else viewerScrollIndex = viewerLines.size() - 1;
+                drawMenu(&displayManager);
+                return true;
+            }
+            if (button == 0) { // Scroll Up
+                if (viewerScrollIndex > 0) viewerScrollIndex--;
+                else viewerScrollIndex = viewerLines.size() - 1;
+                drawMenu(&displayManager);
+                return true;
+            }
             if (button == 1) { // Scroll Down (Single Click)
                 viewerScrollIndex++;
                 if (viewerScrollIndex >= viewerLines.size()) viewerScrollIndex = 0;
@@ -143,6 +155,29 @@ public:
         }
 
         // BROWSER INPUT
+        if (button == 0) { // Scroll Up
+            if (currentFiles.empty()) return true;
+            if (selectedIndex > 0) {
+                selectedIndex--;
+            } else {
+                selectedIndex = currentFiles.size() - 1;
+            }
+            
+            // Adjust scroll offset
+            if (selectedIndex < scrollOffset) {
+                scrollOffset = selectedIndex;
+            } else if (selectedIndex >= scrollOffset + 5) {
+                scrollOffset = selectedIndex - 4;
+            }
+            // Wrap around fix
+            if (selectedIndex == currentFiles.size() - 1) {
+                scrollOffset = max(0, (int)currentFiles.size() - 5);
+            }
+
+            drawMenu(&displayManager);
+            return true;
+        }
+
         if (button == 1) { // Scroll
             if (currentFiles.empty()) return true;
             selectedIndex++;

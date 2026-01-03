@@ -181,7 +181,13 @@ bool BadUSBModule::handleInput(uint8_t button) {
         return true;
     }
 
-    if (button == 1) { // Down / Next
+    if (button == 0) { // Up
+        if (!scriptFiles.empty()) {
+            if (selectedIndex > 0) selectedIndex--;
+            else selectedIndex = scriptFiles.size() - 1;
+            drawMenu(&displayManager);
+        }
+    } else if (button == 1) { // Down / Next
         if (!scriptFiles.empty()) {
             selectedIndex++;
             if (selectedIndex >= (int)scriptFiles.size()) {
