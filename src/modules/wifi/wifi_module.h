@@ -1,130 +1,46 @@
 #pragma once
 #include <Arduino.h>
-#include <vector>
-#include <WiFi.h>
 #include "module_base.h"
 #include "display_manager.h"
 #include "../../ui/icons.h"
-
-struct APInfo {
-    String ssid;
-    int32_t rssi;
-    uint8_t channel;
-    String bssid;
-    wifi_auth_mode_t encryption;
-    unsigned long lastSeen;
-};
-
+#include <WiFi.h>
+#include <vector>
 class WiFiModule : public Module {
-public:
-    // Module Interface
-    void init() override;
-    void loop() override;
-    String getName() override;
-    const unsigned char* getIcon() override;
-    int getIconWidth() override;
-    int getIconHeight() override;
-    int getIconOffsetY() override;
-    int getIconSpacing() override;
-    String getDescription() override;
-    void drawMenu(DisplayManager* display) override;
-    bool handleInput(uint8_t button) override;
-
-    // Attack / Sniffer Methods (Used by wifi_handshake_cap.cpp)
-    static void snifferCallback(void* buf, wifi_promiscuous_pkt_type_t type);
-    void startDeauth();
-    void stopDeauth();
-    void startHandshakeCapture();
-    void stopHandshakeCapture();
-    void startMixedAttack();
-    void stopMixedAttack();
-    void startStationScan();
-    void stopStationScan();
-    
-    // Helper for attack UI updates
-    void updateUI(DisplayManager* display);
-
 private:
-    // State Management
     enum State {
         MENU,
-        SCANNER_MENU,
-        RESULTS,
-        DETAILS,
-        TARGET_OPTIONS,
-        ATTACK_DEAUTH,
-        HANDSHAKE_CAPTURE,
-        ATTACK_MIXED,
-        STATION_SCAN,
-        STATION_LIST,
-        SETTINGS,
-        SETTINGS_SCAN_TIME,
-        SETTINGS_SHOW_HIDDEN,
-        SETTINGS_SORT_METHOD
+        SCAN_NETWORKS,
+        EVIL_PORTAL,
+        KARMA_ATTACK,
+        RESPONDER,
+        SNIFFER,
+        DEAUTH_ATTACK,
+        CAPTURE_HANDSHAKE
     };
-
-    enum SortMethod {
-        SORT_RSSI,
-        SORT_CHANNEL
-    };
-
     State currentState;
-    
-    // Navigation
     int menuIndex;
-    int selectedIndex;   // Index in the scanResults vector
-    int settingsIndex;
-    
-    // Scanner Data
-    std::vector<APInfo> scanResults;
-    bool isScanning;
-    unsigned long lastScanTime;
-    
-    // Selection
-    APInfo selectedTarget;
+    int selectedIndex;
+    int scrollOffset;
+    DisplayManager* displayManager;
 
-    // Attack Data (Accessed by wifi_handshake_cap.cpp)
-    bool isDeauthing = false;
-    bool isCapturing = false;
-    bool isMixedAttack = false;
-    bool isScanningStations = false;
-    int deauthPacketsSent = 0;
-    int handshakesCaptured = 0;
+    // Scanning variables
+    int networkCount = 0;
+    bool scanComplete = false;
+    bool isScanning = false;
+    std::vector<String> scanResults;
     
-    // Station scanning
-    std::vector<String> detectedStations;
-    String selectedStation = ""; // Empty means broadcast/all
-    int stationListIndex = 0;
-
-    // Settings
-    uint32_t scanTimePerChannel = 300;
-    bool showHidden = true;
-    SortMethod sortMethod = SORT_RSSI;
-
-    // Menu Items
-    const char* menuItems[2] = {"Scan Networks", "Settings"};
-    const char* settingsItems[3] = {"Scan Time", "Show Hidden", "Sort By"};
-
-    // Internal Helpers
-    void processScanResults(int networksFound);
-    void sortResults();
-    String getEncryptionName(wifi_auth_mode_t encryption);
-    
-    // Attack Helpers (implemented in wifi_handshake_cap.cpp)
-    void sendDeauthFrame();
-    void drawTerminal(DisplayManager* display);
-    void drawTerminalUpdate(DisplayManager* display);
-    
-    // PCAP
-    String pcapFileName;
-    void openPcapFile();
-    void savePacketToSD(uint8_t* buf, int len);
-
-    // Packet Queue
-    struct CapturedPacket {
-        uint8_t data[512];
-        int len;
-    };
-    QueueHandle_t packetQueue;
-    void processPacketQueue();
+public:
+    WiFiModule() : displayManager(nullptr) {}
+    void init() override;
+    void loop() override;
+    String getName() override { return "WiFi Tools"; }
+    const unsigned char* getIcon() override { return image_wifi_bits; }
+    int getIconWidth() override { return 19; }
+    int getIconHeight() override { return 16; }
+    int getIconSpacing() override { return 16 ; }
+    int getIconOffsetY() override { return 0; }
+    String getDescription() override { return "WiFi Penetration Testing Utilities"; }
+    void drawMenu(DisplayManager* display) override;
+    bool handleInput(uint8_t button) override;
+    // Helper methods for various functionalities can be declared here
 };
