@@ -18,6 +18,8 @@ public:
     void turnOff();
     void clear();
     void clearContent();
+    void clearMenu(); // Clear the menu sprite
+    void updateMenu(); // Push the menu sprite to screen
     void drawStatusBar(String status, float voltage, bool sdStatus, bool wifiStatus, bool showClock = true, String replacement = "", bool forceRedraw = true);
     void drawMenuTitle(String title);
     void drawMenuItem(String text, int index, bool selected, const unsigned char* icon = nullptr, int iconWidth = 16, int iconHeight = 16, int iconSpacing = 8, int iconOffsetY = 0);
@@ -31,6 +33,8 @@ public:
 
 private:
     TFT_eSPI* tft;
+    TFT_eSprite* statusSprite;
+    TFT_eSprite* menuSprite;
     RTC_DS3231 rtc;
     bool rtcInitialized;
 };

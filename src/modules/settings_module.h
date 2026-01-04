@@ -39,7 +39,7 @@ public:
     }
 
     void drawMenu(DisplayManager* display) override {
-        display->clearContent();
+        display->clearMenu();
         ConfigData& data = ConfigManager::getInstance().data;
 
         if (currentState == STATE_MAIN) {
@@ -90,6 +90,7 @@ public:
             display->drawMenuItem("Back", 5, menuIndex == 5);
             display->drawScrollBar(6, 0, 6);
         }
+        display->updateMenu();
     }
 
     bool handleInput(uint8_t button) override {

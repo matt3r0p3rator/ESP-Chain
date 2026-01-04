@@ -75,9 +75,10 @@ public:
     }
 
     void drawMenu(DisplayManager* display) override {
-        display->clearContent();
+        // display->clearContent();
         
         if (currentState == VIEWER) {
+            display->clearContent();
             display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
             display->getTFT()->setTextDatum(TL_DATUM);
             
@@ -99,12 +100,14 @@ public:
 
         // BROWSER MODE
         if (currentFiles.empty()) {
+             display->clearContent();
              display->getTFT()->setTextDatum(MC_DATUM);
              display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
              display->getTFT()->drawString("Empty Folder", 160, 100, 2);
              return;
         }
 
+        display->clearMenu();
         for (int i = 0; i < 5; i++) {
             int idx = scrollOffset + i;
             if (idx >= currentFiles.size()) break;
@@ -116,6 +119,7 @@ public:
             display->drawMenuItem(label, i, idx == selectedIndex);
         }
         display->drawScrollBar(currentFiles.size(), scrollOffset, 5);
+        display->updateMenu();
     }
 
     bool handleInput(uint8_t button) override {

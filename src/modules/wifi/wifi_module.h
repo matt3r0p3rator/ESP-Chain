@@ -9,7 +9,7 @@ class WiFiModule : public Module {
 private:
     enum State {
         MENU,
-        SCAN_NETWORKS,
+        SCAN_RESULTS,
         EVIL_PORTAL,
         KARMA_ATTACK,
         RESPONDER,

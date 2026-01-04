@@ -75,9 +75,10 @@ String BadUSBModule::getDescription() {
 }
 
 void BadUSBModule::drawMenu(DisplayManager* display) {
-    display->clearContent();
+    // display->clearContent();
     
     if (state == STATE_ARMED) {
+        display->clearContent();
         display->drawMenuTitle("ARMED");
         display->getTFT()->setTextDatum(MC_DATUM);
         display->getTFT()->setTextColor(TFT_RED, TFT_BLACK);
@@ -87,6 +88,7 @@ void BadUSBModule::drawMenu(DisplayManager* display) {
         display->getTFT()->drawString("Long Press to Cancel", 160, 200, 2);
         return;
     } else if (state == STATE_WAITING_DELAY) {
+        display->clearContent();
         display->drawMenuTitle("ARMED");
         display->getTFT()->setTextDatum(MC_DATUM);
         display->getTFT()->setTextColor(TFT_ORANGE, TFT_BLACK);
@@ -101,12 +103,14 @@ void BadUSBModule::drawMenu(DisplayManager* display) {
         display->getTFT()->drawString("Long Press to Cancel", 160, 200, 2);
         return;
     } else if (state == STATE_RUNNING) {
+        display->clearContent();
         display->drawMenuTitle("RUNNING");
         display->getTFT()->setTextDatum(MC_DATUM);
         display->getTFT()->setTextColor(TFT_YELLOW, TFT_BLACK);
         display->getTFT()->drawString("EXECUTING...", 160, 100, 4);
         return;
     } else if (state == STATE_DONE) {
+        display->clearContent();
         display->drawMenuTitle("DONE");
         display->getTFT()->setTextDatum(MC_DATUM);
         display->getTFT()->setTextColor(TFT_GREEN, TFT_BLACK);
@@ -120,7 +124,7 @@ void BadUSBModule::drawMenu(DisplayManager* display) {
     if (currentPath != "/payloads") {
         title = currentPath.substring(currentPath.lastIndexOf('/') + 1);
     }
-    display->drawMenuTitle(title);
+    // display->drawMenuTitle(title);
     
     if (!filesLoaded) {
         scriptFiles = sdManager.listDir(currentPath);
@@ -128,9 +132,12 @@ void BadUSBModule::drawMenu(DisplayManager* display) {
     }
     
     if (scriptFiles.empty()) {
+        display->clearContent();
         display->getTFT()->drawString("Empty folder", 20, 60, 2);
         return;
     }
+
+    display->clearMenu();
 
     int maxItems = 5; 
     int startIdx = 0;
@@ -151,6 +158,7 @@ void BadUSBModule::drawMenu(DisplayManager* display) {
         
         display->drawMenuItem(name, i - startIdx, i == selectedIndex);
     }
+    display->updateMenu();
     
     if (statusMessage != "") {
         display->getTFT()->setTextColor(TFT_GREEN, TFT_BLACK);

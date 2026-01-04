@@ -145,24 +145,28 @@ void BLEModule::toggleSpam() {
 }
 
 void BLEModule::drawMenu(DisplayManager* display) {
-    display->clearContent();
+    // display->clearContent();
     
     // Store display pointer for redraws
     this->displayManager = display;
     
     if (currentState == MENU) {
+        display->clearMenu();
         display->drawMenuTitle("BLE Tools");
         display->drawMenuItem("BLE Scanner", 0, menuIndex == 0);
         display->drawMenuItem("BLE Spammer", 1, menuIndex == 1);
+        display->updateMenu();
     } 
     else if (currentState == SCANNER) {
         display->drawMenuTitle("Scanner");
         
         if (foundDevices.empty()) {
+            display->clearContent();
             display->getTFT()->setTextColor(TFT_WHITE);
             display->getTFT()->setTextDatum(TL_DATUM);
             display->getTFT()->drawString(isScanning ? "Scanning..." : "No devices", 10, 40, 2);
         } else {
+            display->clearMenu();
             // Draw list
             int itemsPerPage = 5; // Assuming 5 fits
             int count = foundDevices.size();
@@ -175,9 +179,11 @@ void BLEModule::drawMenu(DisplayManager* display) {
                 display->drawMenuItem(label, i, selectedIndex == idx);
             }
             display->drawScrollBar(count, scrollOffset, itemsPerPage);
+            display->updateMenu();
         }
     }
     else if (currentState == BLESPAM) {
+        display->clearContent();
         display->drawMenuTitle("Spammer");
         display->getTFT()->setTextColor(TFT_WHITE);
         display->getTFT()->setTextDatum(TL_DATUM);

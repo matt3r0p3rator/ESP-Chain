@@ -3,7 +3,7 @@
 
 // Menu Items
 const char* menuItems[] = {
-    "Scan Networks",
+    "Scan Results",
     "Evil Portal",
     "Karma Attack",
     "Responder",
@@ -12,6 +12,7 @@ const char* menuItems[] = {
     "Capture Handshake"
 };
 const int menuItemsCount = 7;
+
 
 void WiFiModule::init() {
     currentState = MENU;
@@ -29,21 +30,48 @@ void WiFiModule::loop() {
 
 void WiFiModule::drawMenu(DisplayManager* display) {
     this->displayManager = display; // Store for later use if needed
-    display->clearContent();
+    // display->clearContent();
 
     if (currentState == MENU) {
+        display->clearMenu();
         display->drawMenuTitle("WiFi Tools");
+        display->drawMenuItem(isScanning ? "Stop Scan" : "Start Scan", 0, selectedIndex == 0);
         for (int i = 0; i < menuItemsCount; i++) {
-            display->drawMenuItem(menuItems[i], i, selectedIndex == i);
+            
+            display->drawMenuItem(menuItems[i], i+1, selectedIndex == i+1);
         }
+        display->drawScrollBar(menuItemsCount + 1, scrollOffset, 3);
+        display->getTFT()->setTextColor(TFT_WHITE);
+        display->getTFT()->setTextDatum(BL_DATUM);
+        display->getTFT()->drawString(isScanning ? "Scanning..." : "Idle", 310, 230, 2);
+        display->updateMenu();
     } else {
+        display->clearContent();
         // Draw sub-menu or tool interface based on currentState
         switch (currentState) {
-            case SCAN_NETWORKS:
-                display->drawMenuTitle("Scan Networks");
-                display->getTFT()->setTextColor(TFT_WHITE);
-                display->getTFT()->setTextDatum(TL_DATUM);
-                display->getTFT()->drawString("Functionality TBD", 10, 40, 2);
+            case SCAN_RESULTS:
+                display->drawMenuTitle("Scan Results");
+                
+                if (scanResults.empty()) {
+                    display->getTFT()->setTextColor(TFT_WHITE);
+                    display->getTFT()->setTextDatum(MC_DATUM);
+                    display->getTFT()->drawString(isScanning ? "Scanning..." : "No Networks Found", 10, 40, 2);
+                } else {
+                    display->clearMenu();
+                    // Draw list
+                    int itemsPerPage = 5; // Assuming 5 fits
+                    int count = scanResults.size();
+                    
+                    for (int i = 0; i < itemsPerPage; i++) {
+                        int idx = scrollOffset + i;
+                        if (idx >= count) break;
+                        
+                        String label = scanResults[idx];
+                        display->drawMenuItem(label, i, selectedIndex == idx);
+                    }
+                    display->drawScrollBar(count, scrollOffset, itemsPerPage);
+                    display->updateMenu();
+                }
                 break;
             case EVIL_PORTAL:
                 display->drawMenuTitle("Evil Portal");

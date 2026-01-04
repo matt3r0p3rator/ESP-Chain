@@ -109,9 +109,10 @@ public:
     void drawMenu(DisplayManager* display) override {
         if (!display || !display->getTFT()) return;
 
-        display->clearContent();
+        // display->clearContent();
 
         if (currentState == SCANNING) {
+            display->clearContent();
             display->drawMenuTitle("Scanning...");
             display->getTFT()->setTextDatum(MC_DATUM);
             display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
@@ -121,14 +122,17 @@ public:
             display->getTFT()->drawString("Found: " + String(devices.size()), 160, 130, 2);
         } 
         else if (currentState == RESULTS) {
-            display->drawMenuTitle("I2C Devices");
+            // display->drawMenuTitle("I2C Devices");
             
             if (devices.empty()) {
+                display->clearContent();
+                display->drawMenuTitle("I2C Devices");
                 display->getTFT()->setTextDatum(MC_DATUM);
                 display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
                 display->getTFT()->drawString("No Devices Found", 160, 100, 2);
                 display->getTFT()->drawString("Btn 1: Rescan", 160, 140, 2);
             } else {
+                display->clearMenu();
                 // List View Logic
                 int itemsPerPage = 5;
                 int start = 0;
@@ -141,6 +145,7 @@ public:
                     String label = devices[idx].hexAddress + " - " + devices[idx].status;
                     display->drawMenuItem(label, i, idx == selectedIndex);
                 }
+                display->updateMenu();
             }
         }
     }

@@ -6,6 +6,8 @@
 
 DisplayManager::DisplayManager() {
     tft = new TFT_eSPI();
+    statusSprite = nullptr;
+    menuSprite = nullptr;
     rtcInitialized = false;
 }
 
@@ -23,6 +25,13 @@ void DisplayManager::init() {
     tft->setTextSize(1);
     tft->setTextColor(THEME_TEXT, THEME_BG);
     
+    // Initialize Sprites
+    statusSprite = new TFT_eSprite(tft);
+    statusSprite->createSprite(320, 20);
+    
+    menuSprite = new TFT_eSprite(tft);
+    menuSprite->createSprite(320, 150);
+
     // Setup PWM for backlight (Pin 38 as per TFT_BL, after TFT_eSPI init)
     ledcSetup(0, 5000, 8); // Channel 0, 5kHz, 8-bit resolution
     ledcAttachPin(38, 0);
@@ -69,53 +78,65 @@ void DisplayManager::clearContent() {
     tft->fillRect(0, 20, 320, 150, THEME_BG);
 }
 
-void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, bool wifiStatus, bool showClock, String replacement, bool forceRedraw) {
-    if (forceRedraw) {
-        tft->fillRect(0, 0, 320, 20, THEME_SECONDARY);
+void DisplayManager::clearMenu() {
+    if (menuSprite) {
+        menuSprite->fillSprite(THEME_BG);
     }
+}
 
-    tft->setTextColor(THEME_TEXT, THEME_SECONDARY);
-    tft->setTextDatum(ML_DATUM);
-    tft->setTextPadding(100);
-    tft->drawString(status.c_str(), 5, 10, 2);
-    tft->setTextPadding(0);
+void DisplayManager::updateMenu() {
+    if (menuSprite) {
+        menuSprite->pushSprite(0, 20);
+    }
+}
+
+void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, bool wifiStatus, bool showClock, String replacement, bool forceRedraw) {
+    if (!statusSprite) return;
+
+    statusSprite->fillSprite(THEME_SECONDARY);
+
+    statusSprite->setTextColor(THEME_TEXT, THEME_SECONDARY);
+    statusSprite->setTextDatum(ML_DATUM);
+    statusSprite->setTextPadding(100);
+    statusSprite->drawString(status.c_str(), 5, 10, 2);
+    statusSprite->setTextPadding(0);
     
     // Draw Clock or Replacement
-    tft->setTextDatum(MC_DATUM);
-    tft->setTextPadding(100);
+    statusSprite->setTextDatum(MC_DATUM);
+    statusSprite->setTextPadding(100);
     if (showClock) {
         if (rtcInitialized) {
             DateTime now = rtc.now();
             char timeStr[10];
             sprintf(timeStr, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-            tft->drawString(timeStr, 160, 10, 2);
+            statusSprite->drawString(timeStr, 160, 10, 2);
         }
     } else {
-        tft->drawString(replacement.c_str(), 160, 10, 2);
+        statusSprite->drawString(replacement.c_str(), 160, 10, 2);
     }
-    tft->setTextPadding(0);
+    statusSprite->setTextPadding(0);
 
     // Draw Voltage Text (First to avoid padding erasing icons)
-    tft->setTextDatum(MR_DATUM);
-    tft->setTextPadding(40);
-    tft->setTextColor(THEME_TEXT, THEME_SECONDARY);
-    tft->drawString((String(voltage, 2) + "V").c_str(), 320, 10, 2);
-    tft->setTextPadding(0);
+    statusSprite->setTextDatum(MR_DATUM);
+    statusSprite->setTextPadding(40);
+    statusSprite->setTextColor(THEME_TEXT, THEME_SECONDARY);
+    statusSprite->drawString((String(voltage, 2) + "V").c_str(), 320, 10, 2);
+    statusSprite->setTextPadding(0);
 
     // Draw WiFi Icon
-    tft->fillRect(215, 2, 18, 16, THEME_SECONDARY);
+    // statusSprite->fillRect(215, 2, 18, 16, THEME_SECONDARY); // Not needed with fillSprite
     if (wifiStatus) {
-        tft->setTextColor(TFT_CYAN, THEME_SECONDARY);
-        tft->drawBitmap(215, 2, image_cloud_sync_bits, 17, 16, TFT_CYAN);
+        statusSprite->setTextColor(TFT_CYAN, THEME_SECONDARY);
+        statusSprite->drawBitmap(215, 2, image_cloud_sync_bits, 17, 16, TFT_CYAN);
     }
 
     // Draw SD Icon
-    tft->fillRect(235, 2, 15, 16, THEME_SECONDARY);
+    // statusSprite->fillRect(235, 2, 15, 16, THEME_SECONDARY);
     uint16_t color = sdStatus ? TFT_CYAN : TFT_RED; // White
-    tft->drawBitmap(235, 2, sdStatus ? image_micro_sd_bits : image_micro_sd_no_card_bits, 14, 16, color);
+    statusSprite->drawBitmap(235, 2, sdStatus ? image_micro_sd_bits : image_micro_sd_no_card_bits, 14, 16, color);
     
     // Draw Battery Icon
-    tft->fillRect(255, 2, 25, 16, THEME_SECONDARY);
+    // statusSprite->fillRect(255, 2, 25, 16, THEME_SECONDARY);
     const unsigned char* batIcon = image_battery_full_bits;
     
     if (voltage >= 4) {
@@ -134,9 +155,9 @@ void DisplayManager::drawStatusBar(String status, float voltage, bool sdStatus, 
         else batIcon = image_battery_full_bits;
     }
     
-    tft->drawBitmap(255, 2, batIcon, 24, 16, THEME_TEXT);
+    statusSprite->drawBitmap(255, 2, batIcon, 24, 16, THEME_TEXT);
     
-    tft->setTextColor(THEME_TEXT, THEME_BG); // Reset
+    statusSprite->pushSprite(0, 0);
 }
 
 float DisplayManager::getBatteryVoltage() {
@@ -154,39 +175,45 @@ void DisplayManager::drawMenuTitle(String title) {
 }
 
 void DisplayManager::drawMenuItem(String text, int index, bool selected, const unsigned char* icon, int iconWidth, int iconHeight, int iconSpacing, int iconOffsetY) {
-    int yPos = 25 + (index * 25); 
+    if (!menuSprite) return;
+
+    // Adjust Y position for sprite (relative to 0,0 of sprite, which is 0,20 on screen)
+    // Original: 25 + (index * 25)
+    // New: 5 + (index * 25)
+    int yPos = 5 + (index * 25); 
     int radius = 4;
     int width = 290;
     
     if (selected) {
-        tft->fillRoundRect(10, yPos, width, 22, radius, THEME_PRIMARY);
-        tft->setTextColor(THEME_TEXT, THEME_PRIMARY);
+        menuSprite->fillRoundRect(10, yPos, width, 22, radius, THEME_PRIMARY);
+        menuSprite->setTextColor(THEME_TEXT, THEME_PRIMARY);
     } else {
-        tft->fillRoundRect(10, yPos, width, 22, radius, THEME_BG);
-        tft->setTextColor(THEME_TEXT, THEME_BG);
+        menuSprite->fillRoundRect(10, yPos, width, 22, radius, THEME_BG);
+        menuSprite->setTextColor(THEME_TEXT, THEME_BG);
     }
-    tft->drawRoundRect(10, yPos, width, 22, radius, TFT_WHITE);
+    menuSprite->drawRoundRect(10, yPos, width, 22, radius, TFT_WHITE);
     
     int textX = 20;
     if (icon) {
         int iconY = yPos + (22 - iconHeight) / 2 + iconOffsetY;
-        tft->drawBitmap(textX, iconY, icon, iconWidth, iconHeight, THEME_TEXT);
+        menuSprite->drawBitmap(textX, iconY, icon, iconWidth, iconHeight, THEME_TEXT);
         textX += iconWidth + iconSpacing;
     }
     
-    tft->setTextDatum(ML_DATUM);
-    tft->drawString(text.c_str(), textX, yPos + 11, 2);
+    menuSprite->setTextDatum(ML_DATUM);
+    menuSprite->drawString(text.c_str(), textX, yPos + 11, 2);
 }
 
 void DisplayManager::drawScrollBar(int totalItems, int currentItem, int visibleItems) {
+    if (!menuSprite) return;
     if (totalItems <= visibleItems) return;
     
     int scrollBarX = 308;
-    int scrollBarY = 25;
+    int scrollBarY = 5; // Adjusted for sprite (was 25)
     int scrollBarWidth = 6;
     int scrollBarHeight = 125; // 5 items * 25px
     // Draw track
-    tft->drawRoundRect(scrollBarX, scrollBarY, scrollBarWidth, scrollBarHeight, 3, THEME_SECONDARY);
+    menuSprite->drawRoundRect(scrollBarX, scrollBarY, scrollBarWidth, scrollBarHeight, 3, THEME_SECONDARY);
     // Calculate thumb
     float ratio = (float)visibleItems / totalItems;
     int thumbHeight = scrollBarHeight * ratio;
@@ -196,33 +223,11 @@ void DisplayManager::drawScrollBar(int totalItems, int currentItem, int visibleI
     float scrollRatio = (float)currentItem / maxScroll;
     int maxThumbY = scrollBarHeight - thumbHeight;
     int thumbY = scrollBarY + (scrollRatio * maxThumbY);
-    tft->fillRoundRect(scrollBarX + 1, thumbY + 1, scrollBarWidth - 2, thumbHeight - 2, 2, TFT_WHITE);
+    menuSprite->fillRoundRect(scrollBarX + 1, thumbY + 1, scrollBarWidth - 2, thumbHeight - 2, 2, TFT_WHITE);
 }
 
 void DisplayManager::updateClock() {
-    if (rtcInitialized) {
-        DateTime now = rtc.now();
-        char timeStr[10];
-        sprintf(timeStr, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-        
-        // Set text color with background to overwrite previous text without flickering
-        tft->setTextColor(THEME_TEXT, THEME_SECONDARY);
-        tft->setTextDatum(MC_DATUM);
-        
-        // We might need to clear the area if the font is proportional and the string width changes
-        // But for HH:MM:SS with a fixed font or similar digits it's usually fine.
-        // To be safe, let's fill a small rect.
-        // 160 is center. Text size 2. 
-        // Let's just trust the background color overwrite for now, it's usually smoother.
-        // Actually, let's use a fixed width padding if needed, but HH:MM:SS is constant length.
-        
-        // Explicitly clear the clock area to be safe against artifacts
-        // tft->fillRect(110, 0, 100, 20, THEME_SECONDARY); 
-        // No, fillRect causes flicker.
-        
-        tft->drawString(timeStr, 160, 10, 2);
-        tft->setTextColor(THEME_TEXT, THEME_BG); // Reset
-    }
+    // Deprecated/Unused in favor of drawStatusBar
 }
 
 void DisplayManager::setTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second) {

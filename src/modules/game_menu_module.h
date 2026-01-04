@@ -49,12 +49,13 @@ public:
             return;
         }
 
-        display->clearContent();
-        display->drawMenuTitle("Games");
+        display->clearMenu();
+        // display->drawMenuTitle("Games");
 
         for (int i = 0; i < games.size(); i++) {
             display->drawMenuItem(games[i]->getName(), i, i == selectedIndex, games[i]->getIcon(), games[i]->getIconWidth(), games[i]->getIconHeight(), games[i]->getIconSpacing(), games[i]->getIconOffsetY());
         }
+        display->updateMenu();
     }
 
     bool handleInput(uint8_t button) override {

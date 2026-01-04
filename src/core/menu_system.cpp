@@ -26,7 +26,7 @@ void MenuSystem::draw() {
     if (inModule && activeModule) {
         activeModule->drawMenu(displayManager);
     } else {
-        displayManager->clearContent();
+        displayManager->clearMenu();
         // displayManager->drawMenuTitle("ESP-Chain"); // Removed title
         
         int start = scrollOffset;
@@ -37,6 +37,7 @@ void MenuSystem::draw() {
             displayManager->drawMenuItem(modules[i]->getName(), i - scrollOffset, i == selectedIndex, modules[i]->getIcon(), modules[i]->getIconWidth(), modules[i]->getIconHeight(), modules[i]->getIconSpacing(), modules[i]->getIconOffsetY());
         }
         displayManager->drawScrollBar(modules.size(), scrollOffset, itemsPerPage);
+        displayManager->updateMenu();
     }
 }
 
