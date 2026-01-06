@@ -1,4 +1,5 @@
 #include "ble-module.h"
+#include "ble_jammer_utils.h"
 #include <esp_mac.h>
 #include <esp_bt.h>
 
@@ -12,6 +13,7 @@ void BLEModule::init() {
     currentSpamType = IOS_POPUP;
     lastSpamUpdate = 0;
     lastScanTime = 0;
+    jammerMode = JAM_CONTINUOUS;
 
     // Initialize BLE only once if possible, or handle re-init
     // BLEDevice::init checks internally? No, usually not safe to call twice without deinit.
@@ -45,9 +47,19 @@ void BLEModule::init() {
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinPreferred(0x06);  
     pAdvertising->setMinPreferred(0x12);
+    
+    // Initialize jammer utils
+    BLEJammerUtils::init();
+    
+    initialized = true;
 }
 
 void BLEModule::loop() {
+    // Jammer loop
+    if (currentState == BLEJAMMER && BLEJammerUtils::isJamming()) {
+        BLEJammerUtils::loop();
+    }
+    
     if (currentState == BLESPAM && isSpamming) {
         // Spam loop - Faster (60ms cycle approx)
         if (millis() - lastSpamUpdate > 60) { 
@@ -107,7 +119,9 @@ void BLEModule::startScan() {
     // Don't clear immediately if we want to keep old results while scanning?
     // But for a fresh scan, we should clear.
     foundDevices.clear();
+    foundAddresses.clear();
     foundRSSIs.clear();
+    scannedDevices.clear();
     
     // Reset selection on new scan
     selectedIndex = 0;
@@ -119,12 +133,30 @@ void BLEModule::startScan() {
     int count = found.getCount();
     for (int i = 0; i < count; i++) {
         BLEAdvertisedDevice device = found.getDevice(i);
-        String name = device.getName().c_str();
+        
+        // Copy strings immediately while device is valid
+        std::string nameStd = device.getName();
+        std::string addrStd = device.getAddress().toString();
+        String name = String(nameStd.c_str());
+        String address = String(addrStd.c_str());
+        int rssi = device.getRSSI();
+        
         if (name.length() == 0) {
-            name = device.getAddress().toString().c_str();
+            name = address;
         }
         foundDevices.push_back(name);
-        foundRSSIs.push_back(device.getRSSI());
+        foundAddresses.push_back(address);
+        foundRSSIs.push_back(rssi);
+        
+        // Create target device inline to avoid reference issues
+        BLETargetDevice target;
+        target.name = name;
+        target.address = address;
+        target.rssi = rssi;
+        target.isConnectable = false;
+        target.serviceUUID = "";
+        
+        scannedDevices.push_back(target);
     }
     
     pBLEScan->clearResults();
@@ -144,8 +176,25 @@ void BLEModule::toggleSpam() {
     }
 }
 
+void BLEModule::selectDeviceForJammer(int index) {
+    if (index >= 0 && index < (int)scannedDevices.size() && !scannedDevices.empty()) {
+        BLEJammerUtils::setTarget(scannedDevices[index]);
+    }
+}
+
+void BLEModule::toggleJammer() {
+    if (BLEJammerUtils::isJamming()) {
+        BLEJammerUtils::stopJamming();
+    } else {
+        BLEJammerUtils::startJamming(jammerMode);
+    }
+}
+
 void BLEModule::drawMenu(DisplayManager* display) {
     // display->clearContent();
+    
+    // Null check
+    if (!display) return;
     
     // Store display pointer for redraws
     this->displayManager = display;
@@ -155,10 +204,15 @@ void BLEModule::drawMenu(DisplayManager* display) {
         display->drawMenuTitle("BLE Tools");
         display->drawMenuItem("BLE Scanner", 0, menuIndex == 0);
         display->drawMenuItem("BLE Spammer", 1, menuIndex == 1);
+        display->drawMenuItem("BLE Jammer", 2, menuIndex == 2);
         display->updateMenu();
     } 
     else if (currentState == SCANNER) {
-        display->drawMenuTitle("Scanner");
+        String title = "Scanner";
+        if (BLEJammerUtils::hasTarget()) {
+            title = "Scanner [Target Set]";
+        }
+        display->drawMenuTitle(title);
         
         if (foundDevices.empty()) {
             display->clearContent();
@@ -204,32 +258,81 @@ void BLEModule::drawMenu(DisplayManager* display) {
         display->getTFT()->drawString("UP/DN: Change Type", 10, 90, 2);
         display->getTFT()->drawString("SELECT: Start/Stop", 10, 110, 2);
     }
+    else if (currentState == BLEJAMMER) {
+        // Extra safety checks
+        if (!display) return;
+        
+        TFT_eSPI* tft = display->getTFT();
+        if (!tft) return;
+        
+        // Clear and setup
+        display->clearContent();
+        display->drawMenuTitle("BLE Jammer");
+        
+        // Set text properties once
+        tft->setTextColor(TFT_WHITE, TFT_BLACK);
+        tft->setTextDatum(TL_DATUM);
+        
+        // Use simple text without function calls
+        tft->drawString("Status:", 10, 40, 2);
+        if (BLEJammerUtils::isJamming()) {
+            tft->drawString("JAMMING", 90, 40, 2);
+        } else {
+            tft->drawString("STOPPED", 90, 40, 2);
+        }
+        
+        // Target info
+        tft->drawString("Target:", 10, 60, 2);
+        if (BLEJammerUtils::hasTarget()) {
+            tft->drawString("SET", 90, 60, 2);
+        } else {
+            tft->drawString("NONE", 90, 60, 2);
+        }
+        
+        // Mode
+        tft->drawString("Mode:", 10, 80, 2);
+        switch(jammerMode) {
+            case JAM_CONTINUOUS: tft->drawString("Continuous", 70, 80, 2); break;
+            case JAM_REACTIVE: tft->drawString("Mimic", 70, 80, 2); break;
+            case JAM_DEAUTH: tft->drawString("Deauth", 70, 80, 2); break;
+        }
+        
+        // Help text
+        tft->drawString("UP/DN:Mode SEL:Start", 10, 120, 1);
+    }
 }
 
 bool BLEModule::handleInput(uint8_t button) {
     // 0=Up, 1=Down, 2=Select, 3=Back
     
+    // Safety check - ensure displayManager is valid
+    if (!displayManager) return true;
+    
     if (currentState == MENU) {
         if (button == 0) { // Up
             menuIndex--;
-            if (menuIndex < 0) menuIndex = 1;
+            if (menuIndex < 0) menuIndex = 2;
             drawMenu(displayManager); // Force redraw
         } else if (button == 1) { // Down
             menuIndex++;
-            if (menuIndex > 1) menuIndex = 0;
+            if (menuIndex > 2) menuIndex = 0;
             drawMenu(displayManager); // Force redraw
         } else if (button == 2) { // Select
             if (menuIndex == 0) {
                 currentState = SCANNER;
                 startScan();
-            } else {
+            } else if (menuIndex == 1) {
                 currentState = BLESPAM;
+            } else if (menuIndex == 2) {
+                currentState = BLEJAMMER;
             }
+            delay(50); // Give time for state change
             drawMenu(displayManager); // Force redraw
         } else if (button == 3) { // Back
             // Stop everything when exiting module
             stopScan();
             if (isSpamming) toggleSpam();
+            BLEJammerUtils::stopJamming();
             return false; // Exit module
         }
     }
@@ -264,10 +367,14 @@ bool BLEModule::handleInput(uint8_t button) {
                 }
                 drawMenu(displayManager); // Force redraw
             }
-        } else if (button == 2) { // Select
-            // Rescan
-            startScan();
-            drawMenu(displayManager); // Force redraw
+        } else if (button == 2) { // Select - Select device for jammer
+            if (!scannedDevices.empty() && selectedIndex >= 0 && selectedIndex < (int)scannedDevices.size()) {
+                selectDeviceForJammer(selectedIndex);
+                // Stay in scanner, don't transition yet
+                // currentState = BLEJAMMER;
+                // Show brief confirmation by redrawing
+            }
+            drawMenu(displayManager);
         } else if (button == 3) { // Back
             stopScan();
             currentState = MENU;
@@ -294,6 +401,30 @@ bool BLEModule::handleInput(uint8_t button) {
             if (isSpamming) toggleSpam();
             currentState = MENU;
             drawMenu(displayManager); // Force redraw
+        }
+    }
+    else if (currentState == BLEJAMMER) {
+        if (button == 0) { // Up - Change mode
+            int mode = (int)jammerMode;
+            mode--;
+            if (mode < 0) mode = 2; // JAM_DEAUTH
+            jammerMode = (JammerMode)mode;
+            BLEJammerUtils::setMode(jammerMode);
+            drawMenu(displayManager);
+        } else if (button == 1) { // Down - Change mode
+            int mode = (int)jammerMode;
+            mode++;
+            if (mode > 2) mode = 0; // JAM_CONTINUOUS
+            jammerMode = (JammerMode)mode;
+            BLEJammerUtils::setMode(jammerMode);
+            drawMenu(displayManager);
+        } else if (button == 2) { // Select - Toggle jammer
+            toggleJammer();
+            drawMenu(displayManager);
+        } else if (button == 3) { // Back
+            BLEJammerUtils::stopJamming();
+            currentState = MENU;
+            drawMenu(displayManager);
         }
     }
     

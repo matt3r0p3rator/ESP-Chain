@@ -55,7 +55,7 @@ void WiFiModule::drawMenu(DisplayManager* display) {
                 if (scanResults.empty()) {
                     display->getTFT()->setTextColor(TFT_WHITE);
                     display->getTFT()->setTextDatum(MC_DATUM);
-                    display->getTFT()->drawString(isScanning ? "Scanning..." : "No Networks Found", 10, 40, 2);
+                    display->getTFT()->drawString(isScanning ? "Scanning..." : "NOT SCANNING", 10, 40, 2);
                 } else {
                     display->clearMenu();
                     // Draw list
@@ -77,37 +77,37 @@ void WiFiModule::drawMenu(DisplayManager* display) {
                 display->drawMenuTitle("Evil Portal");
                 display->getTFT()->setTextColor(TFT_WHITE);
                 display->getTFT()->setTextDatum(TL_DATUM);
-                display->getTFT()->drawString("Functionality TBD", 10, 40, 2);
+                display->getTFT()->drawString("Functionality TBD EVIL PORTAL", 10, 40, 2);
                 break;
             case KARMA_ATTACK:
                 display->drawMenuTitle("Karma Attack");
                 display->getTFT()->setTextColor(TFT_WHITE);
                 display->getTFT()->setTextDatum(TL_DATUM);
-                display->getTFT()->drawString("Functionality TBD", 10, 40, 2);
+                display->getTFT()->drawString("Functionality TBD KARMA ATTACK", 10, 40, 2);
                 break;
             case RESPONDER:
                 display->drawMenuTitle("Responder");
                 display->getTFT()->setTextColor(TFT_WHITE);
                 display->getTFT()->setTextDatum(TL_DATUM);
-                display->getTFT()->drawString("Functionality TBD", 10, 40, 2);
+                display->getTFT()->drawString("Functionality TBD RESPONDER", 10, 40, 2);
                 break;
             case SNIFFER:
                 display->drawMenuTitle("Sniffer");
                 display->getTFT()->setTextColor(TFT_WHITE);
                 display->getTFT()->setTextDatum(TL_DATUM);
-                display->getTFT()->drawString("Functionality TBD", 10, 40, 2);
+                display->getTFT()->drawString("Functionality TBD SNIFFER", 10, 40, 2);
                 break;
             case DEAUTH_ATTACK:
                 display->drawMenuTitle("Deauth Attack");
                 display->getTFT()->setTextColor(TFT_WHITE);
                 display->getTFT()->setTextDatum(TL_DATUM);
-                display->getTFT()->drawString("Functionality TBD", 10, 40, 2);
+                display->getTFT()->drawString("Functionality TBD DEAUTH ATTACK", 10, 40, 2);
                 break;
             case CAPTURE_HANDSHAKE:
                 display->drawMenuTitle("Capture Handshake");
                 display->getTFT()->setTextColor(TFT_WHITE);
                 display->getTFT()->setTextDatum(TL_DATUM);
-                display->getTFT()->drawString("Functionality TBD", 10, 40, 2);
+                display->getTFT()->drawString("Functionality TBD CAPTURE HANDSHAKE", 10, 40, 2);
                 break;
             default:
                 break;
@@ -121,7 +121,7 @@ bool WiFiModule::handleInput(uint8_t button) {
         if (button == 0) { // Up
             selectedIndex--;
             if (selectedIndex < 0) {
-                selectedIndex = menuItemsCount - 1; // Wrap around
+                selectedIndex = menuItemsCount; // Wrap around
             }
             // Adjust scroll offset
             if (selectedIndex < scrollOffset) {
@@ -132,7 +132,7 @@ bool WiFiModule::handleInput(uint8_t button) {
             drawMenu(displayManager); // Force redraw
         } else if (button == 1) { // Down
             selectedIndex++;
-            if (selectedIndex >= menuItemsCount) {
+            if (selectedIndex > menuItemsCount) {
                 selectedIndex = 0; // Wrap around
             }
             // Adjust scroll offset
@@ -143,7 +143,21 @@ bool WiFiModule::handleInput(uint8_t button) {
             }
             drawMenu(displayManager); // Force redraw
         } else if (button == 2) { // Select
-            currentState = static_cast<State>(selectedIndex + 1); // +1 to skip MENU state
+            if (selectedIndex == 0) { // Scan Networks
+                if (isScanning) {
+                    // Stop scan
+                    isScanning = false;
+                    WiFi.scanDelete();
+                } else {
+                    // Start scan
+                    isScanning = true;
+                    scanResults.clear();
+                    networkCount = WiFi.scanNetworks(true);
+                }
+                drawMenu(displayManager); // Force redraw
+                return true;
+            }
+            currentState = static_cast<State>(selectedIndex); // Map directly to State
             drawMenu(displayManager); // Force redraw
         } else if (button == 3) { // Back
             return false; // Exit module

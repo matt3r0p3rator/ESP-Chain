@@ -11,13 +11,15 @@
 #include "sd_manager.h"
 #include <vector>
 #include "ble_spam_utils.h"
+#include "ble_jammer_utils.h"
 
 class BLEModule : public Module {
 private:
     enum State {
         MENU,
         SCANNER,
-        BLESPAM
+        BLESPAM,
+        BLEJAMMER
     };
     State currentState;
     int menuIndex;
@@ -28,7 +30,9 @@ private:
     BLEScan* pBLEScan;
     bool isScanning;
     std::vector<String> foundDevices;
+    std::vector<String> foundAddresses;
     std::vector<int> foundRSSIs;
+    std::vector<BLETargetDevice> scannedDevices;
     unsigned long lastScanTime;
 
     // Spammer members
@@ -38,10 +42,14 @@ private:
     BLEServer* pServer;
     BLEAdvertising* pAdvertising;
     
+    // Jammer members
+    JammerMode jammerMode;
+    
     DisplayManager* displayManager;
+    bool initialized;
 
 public:
-    BLEModule() : pBLEScan(nullptr), pServer(nullptr), pAdvertising(nullptr), displayManager(nullptr) {}
+    BLEModule() : pBLEScan(nullptr), pServer(nullptr), pAdvertising(nullptr), displayManager(nullptr), initialized(false) {}
     void init() override;
     void loop() override;
     String getName() override { return "BLE Tools"; }
@@ -59,4 +67,6 @@ public:
     void startScan();
     void stopScan();
     void toggleSpam();
+    void selectDeviceForJammer(int index);
+    void toggleJammer();
 };
