@@ -11,14 +11,15 @@
 #include "sd_manager.h"
 #include <vector>
 #include "ble_spam_utils.h"
-// BLEJammerUtils removed to isolate crash
+#include "ble_jammer_utils.h"
 
 class BLEModule : public Module {
 private:
     enum State {
         MENU,
         SCANNER,
-        BLESPAM
+        BLESPAM,
+        JAMMER
     };
     State currentState;
     int menuIndex;
@@ -31,6 +32,7 @@ private:
     std::vector<String> foundDevices;
     std::vector<String> foundAddresses;
     std::vector<int> foundRSSIs;
+    std::vector<String> foundUUIDs;
     unsigned long lastScanTime;
 
     // Spammer members
@@ -39,6 +41,11 @@ private:
     unsigned long lastSpamUpdate;
     BLEServer* pServer;
     BLEAdvertising* pAdvertising;
+    
+    // Jammer members
+    bool isJamming;
+    JammerMode currentJammerMode;
+    int jammerMenuIndex;
     
     DisplayManager* displayManager;
     bool initialized;
@@ -51,7 +58,7 @@ public:
     const unsigned char* getIcon() override { return image_bluetooth_bits; }
     int getIconWidth() override { return 16; }
     int getIconHeight() override { return 14; }
-    int getIconSpacing() override { return 16 ; }
+    int getIconSpacing() override { return 18 ; }
     int getIconOffsetY() override { return 0; }
 
     String getDescription() override { return "Bluetooth LE Utilities"; }

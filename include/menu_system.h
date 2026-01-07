@@ -26,4 +26,5 @@ private:
 
     bool isDeepSleepPending;
     unsigned long deepSleepStartTime;
+    unsigned long lastButtonPressTime;
 };

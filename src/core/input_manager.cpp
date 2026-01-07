@@ -45,16 +45,8 @@ void InputManager::update() {
             btn14LongPressHandled = false;
         } else { // Released
             if (!btn14LongPressHandled) {
-                // Potential Click
-                if (clickCount == 0) {
-                    clickCount = 1;
-                    lastClickTime = currentMillis;
-                } else {
-                    // Second click detected!
-                    clickCount = 0; // Reset
-                    // Double Click Action: Select (2)
-                    menuSystem->handleInput(2);
-                }
+                // Single Click Action: Scroll Down (1)
+                menuSystem->handleInput(1);
             }
         }
         delay(DEBOUNCE_DELAY); // Simple debounce
@@ -64,15 +56,7 @@ void InputManager::update() {
             // Long Press: Back (3)
             menuSystem->handleInput(3);
             btn14LongPressHandled = true;
-            clickCount = 0; // Cancel any pending clicks
         }
-    }
-    
-    // Check for single click timeout
-    if (clickCount > 0 && (currentMillis - lastClickTime > DOUBLE_CLICK_DELAY)) {
-        clickCount = 0;
-        // Single Click Action: Scroll Down (1)
-        menuSystem->handleInput(1);
     }
     
     lastBtn14State = reading14;

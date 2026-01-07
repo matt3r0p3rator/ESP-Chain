@@ -28,6 +28,9 @@ struct ConfigData {
     // Game High Scores
     int flappyBirdHighScore = 0;
     int snakeHighScore = 0;
+
+    int sleepTimeout = 30;
+    bool sleepEnabled = true;
 };
 
 class ConfigManager {

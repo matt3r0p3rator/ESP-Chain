@@ -53,6 +53,12 @@ bool ConfigManager::load(String path) {
         data.snakeHighScore = games["snake_high_score"] | 0;
     }
 
+    if (doc.containsKey("sleep")) {
+        JsonObject sleep = doc["sleep"];
+        data.sleepTimeout = sleep["timeout_seconds"] | 30; // Default to 5 seconds
+        data.sleepEnabled = sleep["enabled"] | true;
+    }
+
     return true;
 }
 
@@ -101,6 +107,12 @@ bool ConfigManager::save(String path) {
     games["flappy_bird_high_score"] = data.flappyBirdHighScore;
     games["snake_high_score"] = data.snakeHighScore;
 
+    // Sleep timeout
+    JsonObject sleep = doc["sleep"];
+    if (sleep.isNull()) sleep = doc.createNestedObject("sleep");
+    sleep["timeout_seconds"] = data.sleepTimeout;
+    sleep["enabled"] = data.sleepEnabled;
+    
     String output;
     serializeJsonPretty(doc, output);
     return sdManager.writeFile(path, output);

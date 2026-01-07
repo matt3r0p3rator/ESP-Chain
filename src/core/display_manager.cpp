@@ -69,7 +69,13 @@ void DisplayManager::initRTC() {
 }
 
 void DisplayManager::turnOff() {
-    setBrightness(0); // Turn off backlight
+    // Fade out effect - gradually reduce brightness
+    for (int brightness = 128; brightness >= 0; brightness -= 4) {
+        setBrightness(brightness);
+        delay(30); // Small delay for smooth fade effect
+    }
+    
+    setBrightness(0); // Ensure fully off
     tft->writecommand(TFT_DISPOFF);
     tft->writecommand(TFT_SLPIN);
 }

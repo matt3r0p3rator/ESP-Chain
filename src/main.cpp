@@ -336,6 +336,8 @@ void setup() {
 
     // Initial Draw
     menuSystem.draw();
+    unsigned long initEnd = millis();
+    Serial.println("Initialization Time: " + String(initEnd) + " ms");
 }
 
 void loop() {

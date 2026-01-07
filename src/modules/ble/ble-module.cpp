@@ -1,6 +1,7 @@
 #include "ble-module.h"
 #include <esp_mac.h>
 #include <esp_bt.h>
+#include <algorithm>
 
 void BLEModule::init() {
     currentState = MENU;
@@ -12,32 +13,45 @@ void BLEModule::init() {
     currentSpamType = IOS_POPUP;
     lastSpamUpdate = 0;
     lastScanTime = 0;
+    isJamming = false;
+    currentJammerMode = JAM_CONTINUOUS;
+    jammerMenuIndex = 0;
 
-    // DEBUGGING: ALL BLE operations disabled - testing if this is causing memory corruption
-    // BLEDevice::deinit(true);
-    // delay(50);
-    // BLEDevice::init("ESP-Chain");
-    // esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9); 
-    // esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);
-    // esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9);
-    // pBLEScan = BLEDevice::getScan();
-    // if (pBLEScan) {
-    //     pBLEScan->setActiveScan(true);
-    //     pBLEScan->setInterval(100);
-    //     pBLEScan->setWindow(99);
-    // }
-    // pAdvertising = BLEDevice::getAdvertising();
-    // if (pAdvertising) {
-    //     pAdvertising->addServiceUUID("1234");
-    //     pAdvertising->setScanResponse(true);
-    //     pAdvertising->setMinPreferred(0x06);  
-    //     pAdvertising->setMinPreferred(0x12);
-    // }
+    // Initialize BLE with error handling
+    BLEDevice::deinit(true);
+    delay(50);
+    BLEDevice::init("ESP-Chain");
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9); 
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9);
+    
+    pBLEScan = BLEDevice::getScan();
+    if (pBLEScan) {
+        pBLEScan->setActiveScan(true);
+        pBLEScan->setInterval(100);
+        pBLEScan->setWindow(99);
+    }
+    
+    pAdvertising = BLEDevice::getAdvertising();
+    if (pAdvertising) {
+        pAdvertising->addServiceUUID("1234");
+        pAdvertising->setScanResponse(true);
+        pAdvertising->setMinPreferred(0x06);  
+        pAdvertising->setMinPreferred(0x12);
+    }
+    
+    // Initialize BLE jammer utilities
+    BLEJammerUtils::init();
     
     initialized = true;
 }
 
 void BLEModule::loop() {
+    // Run jammer loop if active
+    if (currentState == JAMMER && isJamming) {
+        BLEJammerUtils::loop();
+    }
+    
     if (currentState == BLESPAM && isSpamming) {
         // Spam loop - Optimized (40ms cycle approx)
         if (millis() - lastSpamUpdate > 40) { 
@@ -105,6 +119,7 @@ void BLEModule::startScan() {
     foundDevices.clear();
     foundAddresses.clear();
     foundRSSIs.clear();
+    foundUUIDs.clear();
     
     // Reset selection on new scan
     selectedIndex = 0;
@@ -124,13 +139,93 @@ void BLEModule::startScan() {
         String address = String(addrStd.c_str());
         int rssi = device.getRSSI();
         
+        // Get service UUID and identify device type
+        String uuidInfo = "";
+        if (device.haveServiceUUID()) {
+            BLEUUID serviceUUID = device.getServiceUUID();
+            std::string uuidStr = serviceUUID.toString();
+            String uuid = String(uuidStr.c_str());
+            
+            // Identify common device types by UUID
+            if (uuid.indexOf("180a") >= 0) {
+                uuidInfo = "[Device Info]";
+            } else if (uuid.indexOf("180f") >= 0) {
+                uuidInfo = "[Battery]";
+            } else if (uuid.indexOf("1812") >= 0) {
+                uuidInfo = "[HID]";
+            } else if (uuid.indexOf("181c") >= 0) {
+                uuidInfo = "[User Data]";
+            } else if (uuid.indexOf("fe2c") >= 0) {
+                uuidInfo = "[FastPair]";
+            } else if (uuid.indexOf("fd6f") >= 0) {
+                uuidInfo = "[Exposure]";
+            } else if (uuid.indexOf("fee7") >= 0 || uuid.indexOf("fee9") >= 0) {
+                uuidInfo = "[Tile]";
+            } else if (uuid.indexOf("feaa") >= 0) {
+                uuidInfo = "[Eddystone]";
+            } else if (uuid.indexOf("181a") >= 0) {
+                uuidInfo = "[Enviro Sens]";
+            } else if (uuid.indexOf("1816") >= 0) {
+                uuidInfo = "[Cycling]";
+            } else if (uuid.indexOf("1818") >= 0) {
+                uuidInfo = "[Cycling Pwr]";
+            } else if (uuid.indexOf("1826") >= 0) {
+                uuidInfo = "[Fitness]";
+            } else {
+                uuidInfo = "[" + uuid.substring(0, 8) + "]";
+            }
+        } else {
+            uuidInfo = "[No UUID]";
+        }
+        
         if (name.length() == 0) {
             name = address;
         }
         foundDevices.push_back(name);
         foundAddresses.push_back(address);
         foundRSSIs.push_back(rssi);
+        foundUUIDs.push_back(uuidInfo);
     }
+    
+    // Sort devices: prioritize those with UUID and/or name
+    // Create indices array for sorting
+    std::vector<int> indices(foundDevices.size());
+    for (int i = 0; i < indices.size(); i++) {
+        indices[i] = i;
+    }
+    
+    // Sort indices based on priority: name+UUID > name OR UUID > neither
+    std::sort(indices.begin(), indices.end(), [this](int a, int b) {
+        bool aHasName = (foundDevices[a] != foundAddresses[a]);
+        bool bHasName = (foundDevices[b] != foundAddresses[b]);
+        bool aHasUUID = (foundUUIDs[a] != "[No UUID]");
+        bool bHasUUID = (foundUUIDs[b] != "[No UUID]");
+        
+        int aPriority = (aHasName ? 2 : 0) + (aHasUUID ? 1 : 0);
+        int bPriority = (bHasName ? 2 : 0) + (bHasUUID ? 1 : 0);
+        
+        if (aPriority != bPriority) {
+            return aPriority > bPriority; // Higher priority first
+        }
+        // If same priority, sort by RSSI (stronger signal first)
+        return foundRSSIs[a] > foundRSSIs[b];
+    });
+    
+    // Reorder all vectors based on sorted indices
+    std::vector<String> sortedDevices, sortedAddresses, sortedUUIDs;
+    std::vector<int> sortedRSSIs;
+    
+    for (int idx : indices) {
+        sortedDevices.push_back(foundDevices[idx]);
+        sortedAddresses.push_back(foundAddresses[idx]);
+        sortedRSSIs.push_back(foundRSSIs[idx]);
+        sortedUUIDs.push_back(foundUUIDs[idx]);
+    }
+    
+    foundDevices = sortedDevices;
+    foundAddresses = sortedAddresses;
+    foundRSSIs = sortedRSSIs;
+    foundUUIDs = sortedUUIDs;
     
     pBLEScan->clearResults();
     lastScanTime = millis();
@@ -151,6 +246,29 @@ void BLEModule::toggleSpam() {
     }
 }
 
+void BLEModule::selectDeviceForJammer(int index) {
+    if (index < 0 || index >= foundDevices.size()) return;
+    
+    BLETargetDevice target;
+    target.name = foundDevices[index];
+    target.address = foundAddresses[index];
+    target.rssi = foundRSSIs[index];
+    target.isConnectable = false;
+    target.serviceUUID = foundUUIDs[index];
+    
+    BLEJammerUtils::setTarget(target);
+}
+
+void BLEModule::toggleJammer() {
+    isJamming = !isJamming;
+    
+    if (isJamming) {
+        BLEJammerUtils::startJamming(currentJammerMode);
+    } else {
+        BLEJammerUtils::stopJamming();
+    }
+}
+
 void BLEModule::drawMenu(DisplayManager* display) {
     // display->clearContent();
     
@@ -165,6 +283,7 @@ void BLEModule::drawMenu(DisplayManager* display) {
         display->drawMenuTitle("BLE Tools");
         display->drawMenuItem("BLE Scanner", 0, menuIndex == 0);
         display->drawMenuItem("BLE Spammer", 1, menuIndex == 1);
+        display->drawMenuItem("BLE Jammer", 2, menuIndex == 2);
         display->updateMenu();
     } 
     else if (currentState == SCANNER) {
@@ -179,7 +298,7 @@ void BLEModule::drawMenu(DisplayManager* display) {
             display->getTFT()->drawString(isScanning ? "Scanning..." : "No devices", 10, 40, 2);
         } else {
             display->clearMenu();
-            // Draw list
+            // Draw list with UUID info
             int itemsPerPage = 5; // Assuming 5 fits
             int count = foundDevices.size();
             
@@ -187,7 +306,13 @@ void BLEModule::drawMenu(DisplayManager* display) {
                 int idx = scrollOffset + i;
                 if (idx >= count) break;
                 
-                String label = foundDevices[idx] + " " + String(foundRSSIs[idx]);
+                // Truncate device name if too long to fit UUID
+                String deviceName = foundDevices[idx];
+                if (deviceName.length() > 12) {
+                    deviceName = deviceName.substring(0, 12);
+                }
+                
+                String label = deviceName + " " + foundUUIDs[idx] + " " + String(foundRSSIs[idx]);
                 display->drawMenuItem(label, i, selectedIndex == idx);
             }
             display->drawScrollBar(count, scrollOffset, itemsPerPage);
@@ -216,6 +341,38 @@ void BLEModule::drawMenu(DisplayManager* display) {
         display->getTFT()->drawString("UP/DN: Change Type", 10, 90, 2);
         display->getTFT()->drawString("SELECT: Start/Stop", 10, 110, 2);
     }
+    else if (currentState == JAMMER) {
+        display->clearContent();
+        display->drawMenuTitle("Jammer");
+        display->getTFT()->setTextColor(TFT_WHITE);
+        display->getTFT()->setTextDatum(TL_DATUM);
+        
+        String status = "Status: " + String(isJamming ? "JAMMING" : "STOPPED");
+        display->getTFT()->drawString(status, 10, 40, 2);
+        
+        if (BLEJammerUtils::hasTarget()) {
+            String target = "Target: " + BLEJammerUtils::getTargetName();
+            display->getTFT()->drawString(target, 10, 60, 2);
+            
+            String rssi = "RSSI: " + String(BLEJammerUtils::getTargetRSSI());
+            display->getTFT()->drawString(rssi, 10, 80, 2);
+        } else {
+            display->getTFT()->drawString("No target set", 10, 60, 2);
+        }
+        
+        String modeStr = "Mode: ";
+        switch(currentJammerMode) {
+            case JAM_CONTINUOUS: modeStr += "Continuous"; break;
+            case JAM_REACTIVE: modeStr += "Reactive"; break;
+            case JAM_DEAUTH: modeStr += "Deauth"; break;
+        }
+        display->getTFT()->drawString(modeStr, 10, 100, 2);
+        
+        if (isJamming) {
+            String packets = "Packets: " + String(BLEJammerUtils::getPacketCount());
+            display->getTFT()->drawString(packets, 10, 120, 2);
+        }
+    }
 }
 
 bool BLEModule::handleInput(uint8_t button) {
@@ -227,11 +384,11 @@ bool BLEModule::handleInput(uint8_t button) {
     if (currentState == MENU) {
         if (button == 0) { // Up
             menuIndex--;
-            if (menuIndex < 0) menuIndex = 1;
+            if (menuIndex < 0) menuIndex = 2;
             drawMenu(displayManager); // Force redraw
         } else if (button == 1) { // Down
             menuIndex++;
-            if (menuIndex > 1) menuIndex = 0;
+            if (menuIndex > 2) menuIndex = 0;
             drawMenu(displayManager); // Force redraw
         } else if (button == 2) { // Select
             if (menuIndex == 0) {
@@ -239,6 +396,8 @@ bool BLEModule::handleInput(uint8_t button) {
                 startScan();
             } else if (menuIndex == 1) {
                 currentState = BLESPAM;
+            } else if (menuIndex == 2) {
+                currentState = JAMMER;
             }
             delay(50); // Give time for state change
             drawMenu(displayManager); // Force redraw
@@ -246,6 +405,7 @@ bool BLEModule::handleInput(uint8_t button) {
             // Stop everything when exiting module
             stopScan();
             if (isSpamming) toggleSpam();
+            if (isJamming) toggleJammer();
 
             return false; // Exit module
         }
@@ -282,7 +442,10 @@ bool BLEModule::handleInput(uint8_t button) {
                 drawMenu(displayManager); // Force redraw
             }
         } else if (button == 2) { // Select - Select device for jammer
-            // Jammer functionality removed
+            if (foundDevices.size() > 0 && selectedIndex < foundDevices.size()) {
+                selectDeviceForJammer(selectedIndex);
+                currentState = JAMMER;
+            }
             drawMenu(displayManager);
         } else if (button == 3) { // Back
             stopScan();
@@ -310,6 +473,32 @@ bool BLEModule::handleInput(uint8_t button) {
             if (isSpamming) toggleSpam();
             currentState = MENU;
             drawMenu(displayManager); // Force redraw
+        }
+    }
+    else if (currentState == JAMMER) {
+        if (button == 0) { // Up - Change mode
+            int mode = (int)currentJammerMode;
+            mode--;
+            if (mode < 0) mode = 2; // JAM_DEAUTH
+            currentJammerMode = (JammerMode)mode;
+            BLEJammerUtils::setMode(currentJammerMode);
+            drawMenu(displayManager);
+        } else if (button == 1) { // Down - Change mode
+            int mode = (int)currentJammerMode;
+            mode++;
+            if (mode > 2) mode = 0; // JAM_CONTINUOUS
+            currentJammerMode = (JammerMode)mode;
+            BLEJammerUtils::setMode(currentJammerMode);
+            drawMenu(displayManager);
+        } else if (button == 2) { // Select - Toggle jamming
+            if (BLEJammerUtils::hasTarget()) {
+                toggleJammer();
+                drawMenu(displayManager);
+            }
+        } else if (button == 3) { // Back
+            if (isJamming) toggleJammer();
+            currentState = MENU;
+            drawMenu(displayManager);
         }
     }
     

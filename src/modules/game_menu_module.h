@@ -3,6 +3,8 @@
 #include "module_base.h"
 #include "games/snake_game.h"
 #include "games/flappy_bird_game.h"
+#include "games/tamagotchi_game.h"
+#include "games/impostor_game.h"
 
 class GameMenuModule : public Module {
 private:
@@ -13,11 +15,15 @@ private:
 
     SnakeGame snakeGame;
     FlappyBirdGame flappyBirdGame;
+    TamagotchiGame tamagotchiGame;
+    ImpostorGame impostorGame;
 
 public:
     GameMenuModule() : activeGame(nullptr), selectedIndex(0), inGame(false) {
         games.push_back(&flappyBirdGame);
         games.push_back(&snakeGame);
+        games.push_back(&tamagotchiGame);
+        games.push_back(&impostorGame);
     }
 
     void init() override {

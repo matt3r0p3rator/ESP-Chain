@@ -25,11 +25,6 @@ private:
     unsigned long btn14PressTime = 0;
     bool btn14LongPressHandled = false;
     
-    // Double Click Logic
-    int clickCount = 0;
-    unsigned long lastClickTime = 0;
-    
     const unsigned long DEBOUNCE_DELAY = 50;
     const unsigned long LONG_PRESS_DELAY = 500;
-    const unsigned long DOUBLE_CLICK_DELAY = 300; // Max time between clicks
 };

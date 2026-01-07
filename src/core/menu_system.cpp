@@ -1,7 +1,9 @@
 #include "menu_system.h"
 #include "driver/rtc_io.h"
+#include "config_manager.h"
 
 #define PIN_EXT_POWER 17
+
 
 MenuSystem::MenuSystem(DisplayManager* display, SDManager* sd) : displayManager(display), sdManager(sd), selectedIndex(0), scrollOffset(0), inModule(false), activeModule(nullptr), isDeepSleepPending(false), deepSleepStartTime(0) {}
 
@@ -42,6 +44,7 @@ void MenuSystem::draw() {
 }
 
 void MenuSystem::handleInput(uint8_t input) {
+    lastButtonPressTime = millis();
     if (isDeepSleepPending) {
         isDeepSleepPending = false;
         draw();
@@ -132,6 +135,12 @@ void MenuSystem::handleInput(uint8_t input) {
 void MenuSystem::update() {
     // Update status bar (clock, battery, etc) every second
     static unsigned long lastUpdate = 0;
+    if (!inModule && (millis() - lastButtonPressTime >= ConfigManager::getInstance().data.sleepTimeout * 1000) &&
+     ConfigManager::getInstance().data.sleepEnabled) // Not in module and button press timeout reached, and enabled
+    {
+        enterDeepSleep();
+    }
+
     double bVoltage = displayManager->getBatteryVoltage();
     if (millis() - lastUpdate > 1000) { 
         lastUpdate = millis();
