@@ -53,19 +53,6 @@ public:
         display->clearContent();
         extern SDManager sdManager;
 
-        String title = "NRF24 Tools";
-        switch(currentState) {
-            case MENU: title = "NRF24 Tools"; break;
-            case SCANNER: title = "NRF24 Scanner"; break;
-            case VIEW_RESULTS: title = "Scan Results"; break;
-            case SNIFFER: title = "NRF24 Sniffer"; break;
-            case INJECTOR: title = "NRF24 Injector"; break;
-            case SETTINGS: title = "NRF24 Settings"; break;
-        }
-        // We don't have easy access to wifi status here, so assume false or pass it if we change the interface.
-        // For now, just pass false.
-        display->drawStatusBar(title, display->getBatteryVoltage(), sdManager.isMounted(), false);
-        
         switch(currentState) {
             case MENU:
                 display->drawMenuTitle("NRF24 Tools");

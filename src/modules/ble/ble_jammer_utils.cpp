@@ -9,7 +9,6 @@ bool BLEJammerUtils::jamming = false;
 JammerMode BLEJammerUtils::currentMode = JAM_CONTINUOUS;
 uint32_t BLEJammerUtils::packetsSent = 0;
 unsigned long BLEJammerUtils::lastPacketTime = 0;
-BLEAdvertising* BLEJammerUtils::pAdvertising = nullptr;
 
 void BLEJammerUtils::init() {
     targetSet = false;
@@ -17,9 +16,13 @@ void BLEJammerUtils::init() {
     packetsSent = 0;
     lastPacketTime = 0;
     currentMode = JAM_CONTINUOUS;
-    
-    // Get advertising handle
-    pAdvertising = BLEDevice::getAdvertising();
+    // Don't call clearTarget() here - the static strings are already initialized
+    // Just reset the fields safely if needed
+    currentTarget.name = "";
+    currentTarget.address = "";
+    currentTarget.rssi = 0;
+    currentTarget.isConnectable = false;
+    currentTarget.serviceUUID = "";
 }
 
 void BLEJammerUtils::setTarget(const BLETargetDevice& target) {
@@ -34,7 +37,12 @@ void BLEJammerUtils::setTarget(const BLETargetDevice& target) {
 
 void BLEJammerUtils::clearTarget() {
     targetSet = false;
-    currentTarget = BLETargetDevice();
+    // Reset fields individually to avoid String memory issues with static objects
+    currentTarget.name = "";
+    currentTarget.address = "";
+    currentTarget.rssi = 0;
+    currentTarget.isConnectable = false;
+    currentTarget.serviceUUID = "";
 }
 
 bool BLEJammerUtils::hasTarget() {
@@ -72,6 +80,7 @@ void BLEJammerUtils::startJamming(JammerMode mode) {
 
 void BLEJammerUtils::stopJamming() {
     jamming = false;
+    BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
     if (pAdvertising) {
         pAdvertising->stop();
     }
@@ -119,9 +128,10 @@ void BLEJammerUtils::loop() {
 }
 
 void BLEJammerUtils::sendInterferencePacket() {
-    if (!pAdvertising) return;
-    
-    pAdvertising->stop();
+    BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
+    if (pAdvertising) {
+        pAdvertising->stop();
+    }
     
     // Randomize MAC address for each packet
     randomizeMac();
@@ -132,6 +142,7 @@ void BLEJammerUtils::sendInterferencePacket() {
     esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
     
     pAdvertising = BLEDevice::getAdvertising();
+    if (!pAdvertising) return;
     
     // Generate interference data
     std::vector<uint8_t> payload = generateInterferenceData();
@@ -148,9 +159,12 @@ void BLEJammerUtils::sendInterferencePacket() {
 }
 
 void BLEJammerUtils::sendMimicPacket() {
-    if (!pAdvertising || !targetSet) return;
+    if (!targetSet) return;
+    BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
     
-    pAdvertising->stop();
+    if (pAdvertising) {
+        pAdvertising->stop();
+    }
     
     // Use target's address pattern (modified)
     // This creates confusion for devices trying to connect to the target
@@ -160,6 +174,7 @@ void BLEJammerUtils::sendMimicPacket() {
     esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
     
     pAdvertising = BLEDevice::getAdvertising();
+    if (!pAdvertising) return;
     
     // Generate mimic data based on target
     std::vector<uint8_t> payload = generateMimicData(currentTarget);
@@ -187,9 +202,12 @@ void BLEJammerUtils::sendMimicPacket() {
 }
 
 void BLEJammerUtils::sendDeauthPacket() {
-    if (!pAdvertising || !targetSet) return;
-    
-    pAdvertising->stop();
+    if (!targetSet) return;
+    BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
+
+    if (pAdvertising) {
+        pAdvertising->stop();
+    }
     
     randomizeMac();
     
@@ -198,6 +216,7 @@ void BLEJammerUtils::sendDeauthPacket() {
     esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
     
     pAdvertising = BLEDevice::getAdvertising();
+    if (!pAdvertising) return;
     
     // Send packets that may cause connection issues
     // This includes advertising with conflicting parameters

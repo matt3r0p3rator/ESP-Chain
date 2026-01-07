@@ -3,6 +3,7 @@
 #include <vector>
 #include "module_base.h"
 #include "display_manager.h"
+#include "config_manager.h"
 
 struct Point {
     int x, y;
@@ -22,6 +23,7 @@ private:
     bool gameOver;
     bool paused;
     int score;
+    int highScore;
     unsigned long lastMoveTime;
     int moveInterval;
     int gridWidth;
@@ -50,6 +52,11 @@ public:
 
     void init() override {
         randomSeed(millis());
+        
+        // Load high score from config
+        ConfigManager& config = ConfigManager::getInstance();
+        highScore = config.data.snakeHighScore;
+        
         // Initialize game state
         snake.clear();
         snake.push_back({5, 5});
@@ -138,6 +145,8 @@ public:
         tft->setTextColor(TFT_WHITE, TFT_BLACK);
         tft->setTextDatum(TL_DATUM);
         tft->drawString("Score: " + String(score), 5, 25, 2);
+        tft->setTextDatum(TR_DATUM);
+        tft->drawString("High: " + String(highScore), 315, 25, 2);
     }
 
     void drawUpdate(Point newHead, Point tailToRemove) {
@@ -159,18 +168,36 @@ public:
         tft->setTextColor(TFT_WHITE, TFT_BLACK);
         tft->setTextDatum(TL_DATUM);
         tft->drawString("Score: " + String(score), 5, 25, 2);
+        tft->setTextDatum(TR_DATUM);
+        tft->drawString("High: " + String(highScore), 315, 25, 2);
     }
 
     void drawGameOver() {
         extern DisplayManager displayManager;
         TFT_eSPI* tft = displayManager.getTFT();
+        
+        // Check and save new high score
+        if (score > highScore) {
+            highScore = score;
+            ConfigManager& config = ConfigManager::getInstance();
+            config.data.snakeHighScore = highScore;
+            config.save();
+        }
+        
         tft->setTextColor(TFT_RED, TFT_BLACK);
         tft->setTextDatum(MC_DATUM);
         tft->drawString("GAME OVER", 160, 85, 4);
         tft->setTextColor(TFT_WHITE, TFT_BLACK);
         tft->drawString("Score: " + String(score), 160, 110, 2);
-        tft->drawString("Press Btn 0/1 to Restart", 160, 130, 2);
-        tft->drawString("Press Back to Exit", 160, 150, 2);
+        if (score > 0 && score == highScore) {
+            tft->setTextColor(TFT_YELLOW, TFT_BLACK);
+            tft->drawString("NEW HIGH SCORE!", 160, 125, 2);
+            tft->setTextColor(TFT_WHITE, TFT_BLACK);
+        } else {
+            tft->drawString("High Score: " + String(highScore), 160, 125, 2);
+        }
+        tft->drawString("Press Btn 0/1 to Restart", 160, 140, 2);
+        tft->drawString("Press Back to Exit", 160, 155, 2);
     }
 
     String getName() override {

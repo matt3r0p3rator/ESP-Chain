@@ -84,7 +84,6 @@ private:
     static JammerMode currentMode;
     static uint32_t packetsSent;
     static unsigned long lastPacketTime;
-    static BLEAdvertising* pAdvertising;
     
     // Internal methods
     static void sendInterferencePacket();

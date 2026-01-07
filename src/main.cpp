@@ -171,9 +171,28 @@ void checkPin() {
     pinMode(BTN_0, INPUT_PULLUP);
     pinMode(BTN_14, INPUT_PULLUP);
     
+    unsigned long startTime = millis();
+    const unsigned long TIMEOUT_MS = 15000; // 15 seconds timeout
+    
     while (true) {
+        // Check for timeout
+        if (millis() - startTime >= TIMEOUT_MS) {
+            displayManager.clearContent();
+            displayManager.getTFT()->setTextDatum(MC_DATUM);
+            displayManager.getTFT()->setTextColor(TFT_RED, TFT_BLACK);
+            displayManager.getTFT()->drawString("Timeout!", 160, 85, 4);
+            displayManager.getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
+            displayManager.getTFT()->drawString("Going to sleep...", 160, 120, 2);
+            delay(1500);
+            
+            // Call the sleep function
+            sleepModule.init();
+            sleepModule.loop();
+            return; // Should never reach here
+        }
+        
         displayManager.clearContent();
-        displayManager.drawMenuTitle("Security Check");
+        //displayManager.drawMenuTitle("Security Check");
         
         displayManager.getTFT()->setTextDatum(MC_DATUM);
         displayManager.getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
@@ -198,6 +217,11 @@ void checkPin() {
         bool btn14Pressed = false;
         
         while (!btn0Pressed && !btn14Pressed) {
+            // Check for timeout inside button wait loop
+            if (millis() - startTime >= TIMEOUT_MS) {
+                break; // Break out to outer loop to handle timeout
+            }
+            
             if (digitalRead(BTN_0) == LOW) {
                 delay(50);
                 if (digitalRead(BTN_0) == LOW) {

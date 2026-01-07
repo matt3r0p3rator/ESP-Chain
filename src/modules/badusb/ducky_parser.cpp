@@ -42,13 +42,13 @@ void DuckyParser::processMultiModifier(String line) {
     // Press all modifiers
     for (int i = 0; i < tokenCount - 1; i++) {
         if (tokens[i] == "CTRL" || tokens[i] == "CONTROL") {
-            _keyboard->pressRaw(0xE0); // HID_KEY_CONTROL_LEFT
+            _keyboard->press(KEY_LEFT_CTRL);
         } else if (tokens[i] == "SHIFT") {
-            _keyboard->pressRaw(0xE1); // HID_KEY_SHIFT_LEFT
+            _keyboard->press(KEY_LEFT_SHIFT);
         } else if (tokens[i] == "ALT") {
-            _keyboard->pressRaw(0xE2); // HID_KEY_ALT_LEFT
+            _keyboard->press(KEY_LEFT_ALT);
         } else if (tokens[i] == "GUI" || tokens[i] == "WINDOWS") {
-            _keyboard->pressRaw(0xE3); // HID_KEY_GUI_LEFT
+            _keyboard->press(KEY_LEFT_GUI);
         }
     }
     
@@ -62,7 +62,7 @@ void DuckyParser::processMultiModifier(String line) {
     } else if (finalKey.length() == 1) {
         char c = finalKey.charAt(0);
         if (c >= 'A' && c <= 'Z') {
-            _keyboard->pressRaw(0x04 + (c - 'A')); // HID key code for letters
+             _keyboard->press(tolower(c));
         }
     }
     
@@ -113,31 +113,29 @@ void DuckyParser::processLine(String line) {
             args.trim();
             uint8_t k = getKeyCode(args);
             
-            // Press GUI key first using raw TinyUSB code
-            _keyboard->pressRaw(0xE3); // HID_KEY_GUI_LEFT
+            // Press GUI key first
+            _keyboard->press(KEY_LEFT_GUI);
             delay(50);
             
             // Then press the target key
             if (k) {
                 _keyboard->press(k);
             } else if (args.length() == 1) {
-                // For single characters, use HID key code
-                // HID keyboard codes: 'a'/'A' = 0x04, 'b'/'B' = 0x05, etc.
                 char c = args.charAt(0);
                 if (c >= 'a' && c <= 'z') {
-                    _keyboard->pressRaw(0x04 + (c - 'a')); // HID key code for letters
+                    _keyboard->press(c);
                 } else if (c >= 'A' && c <= 'Z') {
-                    _keyboard->pressRaw(0x04 + (c - 'A')); // HID key code for letters
+                    _keyboard->press(tolower(c));
                 }
             }
             
             delay(50); // Hold both keys
             _keyboard->releaseAll();
         } else {
-            // Just Windows key alone - use raw TinyUSB code
-            _keyboard->pressRaw(0xE3); // HID_KEY_GUI_LEFT
+            // Just Windows key alone
+            _keyboard->press(KEY_LEFT_GUI);
             delay(100); // Longer delay to ensure registration
-            _keyboard->releaseRaw(0xE3);
+            _keyboard->releaseAll(); 
             delay(50);
         }
     } else if (command == "APP" || command == "MENU") {
@@ -211,12 +209,12 @@ uint8_t DuckyParser::getKeyCode(String key) {
     if (key == "INSERT") return KEY_INSERT;
     if (key == "PAGEUP") return KEY_PAGE_UP;
     if (key == "PAGEDOWN") return KEY_PAGE_DOWN;
-    if (key == "PRINTSCREEN") return 0xCE; // PrintScreen
+    // if (key == "PRINTSCREEN") return 0xCE; // PrintScreen
     if (key == "SPACE") return ' ';
-    if (key == "PLUS") return HID_KEY_KEYPAD_ADD;
-    if (key == "MINUS") return HID_KEY_KEYPAD_SUBTRACT;
-    if (key == "VOLUMEUP") return 0x80; // Volume Up
-    if (key == "VOLUMEDOWN") return 0x81; // Volume Down
+    if (key == "PLUS") return '+';
+    if (key == "MINUS") return '-';
+    // if (key == "VOLUMEUP") return 0x80; // Volume Up
+    // if (key == "VOLUMEDOWN") return 0x81; // Volume Down
     
     if (key.startsWith("F")) {
         int fNum = key.substring(1).toInt();

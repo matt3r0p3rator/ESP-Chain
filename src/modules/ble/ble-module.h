@@ -11,15 +11,14 @@
 #include "sd_manager.h"
 #include <vector>
 #include "ble_spam_utils.h"
-#include "ble_jammer_utils.h"
+// BLEJammerUtils removed to isolate crash
 
 class BLEModule : public Module {
 private:
     enum State {
         MENU,
         SCANNER,
-        BLESPAM,
-        BLEJAMMER
+        BLESPAM
     };
     State currentState;
     int menuIndex;
@@ -32,7 +31,6 @@ private:
     std::vector<String> foundDevices;
     std::vector<String> foundAddresses;
     std::vector<int> foundRSSIs;
-    std::vector<BLETargetDevice> scannedDevices;
     unsigned long lastScanTime;
 
     // Spammer members
@@ -41,9 +39,6 @@ private:
     unsigned long lastSpamUpdate;
     BLEServer* pServer;
     BLEAdvertising* pAdvertising;
-    
-    // Jammer members
-    JammerMode jammerMode;
     
     DisplayManager* displayManager;
     bool initialized;

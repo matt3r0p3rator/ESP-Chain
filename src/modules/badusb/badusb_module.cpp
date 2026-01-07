@@ -22,11 +22,20 @@ void BadUSBModule::init() {
 
 void BadUSBModule::loop() {
     if (state == STATE_ARMED) {
-        // USB Detection is not reliable on all cores/settings without TinyUSB
-        // We will proceed to delay immediately.
-        state = STATE_WAITING_DELAY;
-        armedTime = millis();
-        drawMenu(&displayManager);
+        // Wait for USB connection (Heuristic: Voltage >= 4.0V)
+        // If we are on battery, we wait. If plugged in, we proceed.
+        if (!displayManager.isOnBattery()) {
+            state = STATE_WAITING_DELAY;
+            armedTime = millis();
+            drawMenu(&displayManager);
+        } else {
+            // Update UI occasionally to show we are waiting
+            static unsigned long lastUpdate = 0; 
+            if (millis() - lastUpdate > 500) {
+                lastUpdate = millis();
+                // drawMenu(&displayManager); // Optional: Re-draw if we want to animate something
+            }
+        }
     } else if (state == STATE_WAITING_DELAY) {
         // Update countdown on screen every 100ms
         static unsigned long lastUpdate = 0;
@@ -124,7 +133,7 @@ void BadUSBModule::drawMenu(DisplayManager* display) {
     if (currentPath != "/payloads") {
         title = currentPath.substring(currentPath.lastIndexOf('/') + 1);
     }
-    // display->drawMenuTitle(title);
+    display->drawMenuTitle(title);
     
     if (!filesLoaded) {
         scriptFiles = sdManager.listDir(currentPath);

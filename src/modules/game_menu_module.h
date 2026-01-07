@@ -2,6 +2,7 @@
 #include <vector>
 #include "module_base.h"
 #include "games/snake_game.h"
+#include "games/flappy_bird_game.h"
 
 class GameMenuModule : public Module {
 private:
@@ -11,9 +12,11 @@ private:
     bool inGame;
 
     SnakeGame snakeGame;
+    FlappyBirdGame flappyBirdGame;
 
 public:
     GameMenuModule() : activeGame(nullptr), selectedIndex(0), inGame(false) {
+        games.push_back(&flappyBirdGame);
         games.push_back(&snakeGame);
     }
 

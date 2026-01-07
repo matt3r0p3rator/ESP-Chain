@@ -132,9 +132,21 @@ void MenuSystem::handleInput(uint8_t input) {
 void MenuSystem::update() {
     // Update status bar (clock, battery, etc) every second
     static unsigned long lastUpdate = 0;
+    double bVoltage = displayManager->getBatteryVoltage();
     if (millis() - lastUpdate > 1000) { 
         lastUpdate = millis();
         if (!isDeepSleepPending) {
+            if (bVoltage < 3.1) {
+                isDeepSleepPending = true;
+                deepSleepStartTime = millis();
+                displayManager->clearContent();
+                displayManager->getTFT()->setTextDatum(MC_DATUM);
+                displayManager->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
+                displayManager->getTFT()->drawString("Low Battery!", 160, 80, 4);
+                displayManager->getTFT()->drawString("Sleeping in 5s...", 160, 120, 2);
+                displayManager->getTFT()->drawString("Charge soon", 160, 140, 2);
+                return;
+            }
             bool wifiActive = false;
             for (auto* mod : modules) {
                 if (mod->isBackgroundRunning()) {
@@ -144,7 +156,7 @@ void MenuSystem::update() {
             }
             String statusText = inModule && activeModule ? activeModule->getName() : "Main Menu";
             // Update status bar without full redraw
-            displayManager->drawStatusBar(statusText, displayManager->getBatteryVoltage(), sdManager->isMounted(), wifiActive, true, "", false);
+            displayManager->drawStatusBar(statusText, bVoltage, sdManager->isMounted(), wifiActive, true, "", false);
         }
     }
 

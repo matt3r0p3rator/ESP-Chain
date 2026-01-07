@@ -1,8 +1,12 @@
 #include "display_manager.h"
 #include "../ui/icons.h"
 #include <Wire.h>
+#include <WiFi.h>
+#include <SD.h>
+#include <SPI.h>
 
 #define PIN_BAT_VOLT 4
+#define PIN_SD_CS 10
 
 DisplayManager::DisplayManager() {
     tft = new TFT_eSPI();
@@ -171,7 +175,11 @@ bool DisplayManager::isOnBattery() {
 }
 
 void DisplayManager::drawMenuTitle(String title) {
-    // Title removed as per user request
+    // Set the title text on the top bar
+    float voltage = getBatteryVoltage();
+    bool sdStatus = SD.begin(PIN_SD_CS);
+    bool wifiStatus = (WiFi.status() == WL_CONNECTED);
+    drawStatusBar(title, voltage, sdStatus, wifiStatus);
 }
 
 void DisplayManager::drawMenuItem(String text, int index, bool selected, const unsigned char* icon, int iconWidth, int iconHeight, int iconSpacing, int iconOffsetY) {

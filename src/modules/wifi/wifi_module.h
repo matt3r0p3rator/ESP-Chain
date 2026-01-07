@@ -24,10 +24,23 @@ private:
     DisplayManager* displayManager;
 
     // Scanning variables
+    struct NetworkInfo {
+        String ssid;
+        int32_t rssi;
+        wifi_auth_mode_t encryption;
+        int channel;
+    };
+    
     int networkCount = 0;
     bool scanComplete = false;
     bool isScanning = false;
-    std::vector<String> scanResults;
+    bool scanDataReady = false;
+    bool processingData = false;
+    std::vector<NetworkInfo> networks;
+    
+    // Helper methods
+    String getEncryptionType(wifi_auth_mode_t encryption);
+    String getSignalStrength(int32_t rssi);
     
 public:
     WiFiModule() : displayManager(nullptr) {}

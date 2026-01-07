@@ -24,6 +24,10 @@ struct ConfigData {
     // Security
     String securityPin = "0000";
     bool securityLockOnBoot = false;
+
+    // Game High Scores
+    int flappyBirdHighScore = 0;
+    int snakeHighScore = 0;
 };
 
 class ConfigManager {
