@@ -9,18 +9,13 @@ class WiFiModule : public Module {
 private:
     enum State {
         MENU,
-        SCAN_RESULTS,
-        EVIL_PORTAL,
-        KARMA_ATTACK,
-        RESPONDER,
-        SNIFFER,
-        DEAUTH_ATTACK,
-        CAPTURE_HANDSHAKE
+        VIEW_SCAN
     };
     State currentState;
     int menuIndex;
     int selectedIndex;
     int scrollOffset;
+    bool isScanning;
     DisplayManager* displayManager;
 
     // Scanning variables
@@ -32,10 +27,6 @@ private:
     };
     
     int networkCount = 0;
-    bool scanComplete = false;
-    bool isScanning = false;
-    bool scanDataReady = false;
-    bool processingData = false;
     std::vector<NetworkInfo> networks;
     
     // Helper methods
@@ -46,7 +37,10 @@ public:
     WiFiModule() : displayManager(nullptr) {}
     void init() override;
     void loop() override;
-    String getName() override { return "WiFi Tools"; }
+    String getName() override { 
+        if (currentState == VIEW_SCAN) return "Scan Results";
+        return "WiFi Tools"; 
+    }
     const unsigned char* getIcon() override { return image_wifi_bits; }
     int getIconWidth() override { return 19; }
     int getIconHeight() override { return 16; }
