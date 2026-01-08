@@ -91,9 +91,9 @@ public:
             html += "<input type='text' name='name' placeholder='New Folder Name'>";
             html += "<input type='submit' value='Create Folder'></form>";
             
-            // Upload Form
+            // Upload Form (supports multiple file selection)
             html += "<form method='POST' action='/upload?path=" + path + "' enctype='multipart/form-data'>";
-            html += "<input type='file' name='upload'><input type='submit' value='Upload File'></form>";
+            html += "<input type='file' name='upload' multiple><input type='submit' value='Upload File(s)'></form>";
 
             html += "<hr><ul>";
 
