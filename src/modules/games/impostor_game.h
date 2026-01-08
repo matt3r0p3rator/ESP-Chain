@@ -20,7 +20,7 @@ private:
     int currentPlayerRevealing;
     int impostorPlayer;
     String selectedWord;
-    String selectedWordlist;
+    std::vector<String> selectedWordlists;
     std::vector<String> availableWordlists;
     int wordlistScrollOffset;
     int selectedWordlistIndex;
@@ -67,38 +67,40 @@ private:
     }
 
     String getRandomWord() {
-        if (!sdManager.isMounted()) {
+        if (!sdManager.isMounted() || selectedWordlists.empty()) {
             return "ERROR";
         }
 
-        String path = "/wordlists/" + selectedWordlist;
-        String content = sdManager.readFile(path);
-        
-        if (content.length() == 0) {
-            return "EMPTY";
-        }
-
-        // Parse words (one per line)
+        // Collect words from all selected wordlists
         std::vector<String> words;
-        int startIdx = 0;
-        for (int i = 0; i < content.length(); i++) {
-            if (content[i] == '\n' || content[i] == '\r') {
-                if (i > startIdx) {
-                    String word = content.substring(startIdx, i);
-                    word.trim();
-                    if (word.length() > 0) {
-                        words.push_back(word);
+        
+        for (const auto& wordlist : selectedWordlists) {
+            String path = "/wordlists/" + wordlist;
+            String content = sdManager.readFile(path);
+            
+            if (content.length() == 0) continue;
+
+            // Parse words (one per line)
+            int startIdx = 0;
+            for (int i = 0; i < content.length(); i++) {
+                if (content[i] == '\n' || content[i] == '\r') {
+                    if (i > startIdx) {
+                        String word = content.substring(startIdx, i);
+                        word.trim();
+                        if (word.length() > 0) {
+                            words.push_back(word);
+                        }
                     }
+                    startIdx = i + 1;
                 }
-                startIdx = i + 1;
             }
-        }
-        // Add last word if file doesn't end with newline
-        if (startIdx < content.length()) {
-            String word = content.substring(startIdx);
-            word.trim();
-            if (word.length() > 0) {
-                words.push_back(word);
+            // Add last word if file doesn't end with newline
+            if (startIdx < content.length()) {
+                String word = content.substring(startIdx);
+                word.trim();
+                if (word.length() > 0) {
+                    words.push_back(word);
+                }
             }
         }
 
@@ -167,18 +169,43 @@ private:
             return;
         }
         
-        // Use menu system to draw items
+        // Total items = wordlists + 1 (Next button)
+        int totalItems = availableWordlists.size() + 1;
         int itemsPerPage = 5;
         int displayCount = 0;
         
-        for (int i = wordlistScrollOffset; i < availableWordlists.size() && displayCount < itemsPerPage; i++, displayCount++) {
-            bool selected = (i == selectedWordlistIndex);
-            display->drawMenuItem(availableWordlists[i], displayCount, selected);
+        for (int i = wordlistScrollOffset; i < totalItems && displayCount < itemsPerPage; i++, displayCount++) {
+            bool highlighted = (i == selectedWordlistIndex);
+            
+            if (i < availableWordlists.size()) {
+                // Regular wordlist item
+                bool checked = false;
+                
+                // Check if this wordlist is selected
+                for (const auto& sel : selectedWordlists) {
+                    if (sel == availableWordlists[i]) {
+                        checked = true;
+                        break;
+                    }
+                }
+                
+                // Create display name with checkbox
+                String displayName = checked ? "[X] " : "[ ] ";
+                displayName += availableWordlists[i];
+                
+                display->drawMenuItem(displayName, displayCount, highlighted);
+            } else {
+                // Next button
+                String nextText = ">>> Next (";
+                nextText += String(selectedWordlists.size());
+                nextText += " selected)";
+                display->drawMenuItem(nextText, displayCount, highlighted);
+            }
         }
         
         // Draw scroll indicator if needed
-        if (availableWordlists.size() > itemsPerPage) {
-            display->drawScrollBar(availableWordlists.size(), wordlistScrollOffset, itemsPerPage);
+        if (totalItems > itemsPerPage) {
+            display->drawScrollBar(totalItems, wordlistScrollOffset, itemsPerPage);
         }
         
         display->updateMenu();
@@ -223,8 +250,9 @@ private:
         // Show word or impostor message
         if (currentPlayerRevealing == impostorPlayer) {
             tft->setTextColor(TFT_RED, THEME_BG);
-            tft->setTextSize(2);
-            tft->drawString("IMPOSTOR", 160, 75, 4);
+            tft->setTextSize(1);
+            tft->setFreeFont(&FreeSans24pt7b);
+            tft->drawString("IMPOSTOR", 160, 75);
             tft->setTextSize(1);
             tft->setTextColor(THEME_TEXT, THEME_BG);
             tft->drawString("No word for you!", 160, 120, 2);
@@ -232,8 +260,9 @@ private:
         } else {
             // Show the word
             tft->setTextColor(TFT_YELLOW, THEME_BG);
-            tft->setTextSize(2);
-            tft->drawString(selectedWord, 160, 85, 4);
+            tft->setTextSize(1);
+            tft->setFreeFont(&FreeSansBold24pt7b);
+            tft->drawString(selectedWord, 160, 85);
             
             tft->setTextSize(1);
             tft->setTextColor(THEME_TEXT, THEME_BG);
@@ -261,6 +290,7 @@ public:
         selectedPlayerIndex = 0;
         wordlistScrollOffset = 0;
         selectedWordlistIndex = 0;
+        selectedWordlists.clear();
         loadWordlists();
     }
 
@@ -332,30 +362,51 @@ public:
                 break;
 
             case IMPOSTOR_WORDLIST_SELECT:
-                if (button == 0) { // UP
-                    if (availableWordlists.size() > 0 && selectedWordlistIndex > 0) {
+                if (button == 0) { // UP - Scroll up
+                    if (selectedWordlistIndex > 0) {
                         selectedWordlistIndex--;
                         if (selectedWordlistIndex < wordlistScrollOffset) {
                             wordlistScrollOffset = selectedWordlistIndex;
                         }
                         drawMenu(&displayManager);
                     }
-                } else if (button == 1) { // DOWN
-                    if (availableWordlists.size() > 0 && selectedWordlistIndex < (int)availableWordlists.size() - 1) {
+                } else if (button == 1) { // DOWN - Scroll down
+                    int totalItems = availableWordlists.size() + 1; // +1 for Next button
+                    if (selectedWordlistIndex < totalItems - 1) {
                         selectedWordlistIndex++;
                         if (selectedWordlistIndex >= wordlistScrollOffset + 5) {
                             wordlistScrollOffset = selectedWordlistIndex - 4;
                         }
                         drawMenu(&displayManager);
                     }
-                } else if (button == 2) { // SELECT
-                    if (availableWordlists.size() > 0 && 
-                        selectedWordlistIndex < (int)availableWordlists.size() &&
-                        !availableWordlists[selectedWordlistIndex].startsWith("Error") &&
-                        !availableWordlists[selectedWordlistIndex].startsWith("No")) {
-                        selectedWordlist = availableWordlists[selectedWordlistIndex];
-                        distributeWords();
-                        drawMenu(&displayManager);
+                } else if (button == 2) { // SELECT - Toggle checkbox or proceed
+                    if (selectedWordlistIndex < (int)availableWordlists.size()) {
+                        // Toggling a wordlist checkbox
+                        if (!availableWordlists[selectedWordlistIndex].startsWith("Error") &&
+                            !availableWordlists[selectedWordlistIndex].startsWith("No")) {
+                            
+                            String wordlist = availableWordlists[selectedWordlistIndex];
+                            bool found = false;
+                            
+                            for (int i = 0; i < selectedWordlists.size(); i++) {
+                                if (selectedWordlists[i] == wordlist) {
+                                    selectedWordlists.erase(selectedWordlists.begin() + i);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (!found) {
+                                selectedWordlists.push_back(wordlist);
+                            }
+                            drawMenu(&displayManager);
+                        }
+                    } else {
+                        // Next button pressed
+                        if (selectedWordlists.size() > 0) {
+                            distributeWords();
+                            drawMenu(&displayManager);
+                        }
                     }
                 } else if (button == 3) { // BACK
                     state = IMPOSTOR_PLAYER_SELECT;
