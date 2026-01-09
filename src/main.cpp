@@ -15,6 +15,7 @@
 #include "modules/nrf24/nrf24_module.h"
 #include "modules/usb_storage_module.h"
 #include "modules/wifi_storage_module.h"
+#include "modules/ble_storage_module.h"
 #include "modules/firmare_upgrade_module.h"
 #include "badusb_module.h"
 #include "sd_manager.h"
@@ -153,6 +154,7 @@ I2CScannerModule i2cScannerModule;
 NRF24Module nrf24Module;
 USBStorageModule usbStorageModule;
 WiFiStorageModule wifiStorageModule;
+BLEStorageModule bleStorageModule;
 FirmwareUpgradeModule firmwareUpgradeModule;
 
 int PIN_EXT_POWER = 17;
@@ -328,6 +330,7 @@ void setup() {
     menuSystem.registerModule(&fileExplorerModule);
     menuSystem.registerModule(&usbStorageModule);
     menuSystem.registerModule(&wifiStorageModule);
+    menuSystem.registerModule(&bleStorageModule);
     menuSystem.registerModule(&firmwareUpgradeModule);
     menuSystem.registerModule(&sleepModule);
     menuSystem.registerModule(&settingsModule);

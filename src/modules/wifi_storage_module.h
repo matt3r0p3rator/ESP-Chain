@@ -142,6 +142,15 @@ public:
             String path = server->arg("file");
             if (SD.exists(path)) {
                 File file = SD.open(path, FILE_READ);
+                
+                // Extract filename from path for proper download naming
+                String filename = path;
+                if (filename.lastIndexOf('/') >= 0) {
+                    filename = filename.substring(filename.lastIndexOf('/') + 1);
+                }
+                
+                // Set Content-Disposition header with the actual filename
+                server->sendHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
                 server->streamFile(file, "application/octet-stream");
                 file.close();
             } else {

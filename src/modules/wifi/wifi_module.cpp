@@ -147,6 +147,16 @@ void WiFiModule::init() {
     isSniffing = false;
     snifferChannel = 1;
     lastSnifferUpdate = 0;
+    lastScanUpdate = 0;
+    lastNetworkCount = 0;
+    
+    // Initialize sniffer display cache
+    lastDisplayedTotal = 0;
+    lastDisplayedBeacons = 0;
+    lastDisplayedDeauth = 0;
+    lastDisplayedData = 0;
+    lastDisplayedRuntime = 0;
+    lastDisplayedPcapStatus = false;
 }
 
 void WiFiModule::loop() {
@@ -154,9 +164,8 @@ void WiFiModule::loop() {
         // Check if scan is complete
         int n = WiFi.scanComplete();
         if (n >= 0) {
-            // Scan finished
-            networks.clear();
-            networkCount = n;
+            // Scan finished - rebuild network list
+            std::vector<NetworkInfo> newNetworks;
             
             for (int i = 0; i < n; i++) {
                 NetworkInfo info;
@@ -165,7 +174,28 @@ void WiFiModule::loop() {
                 info.rssi = WiFi.RSSI(i);
                 info.encryption = WiFi.encryptionType(i);
                 info.channel = WiFi.channel(i);
-                networks.push_back(info);
+                newNetworks.push_back(info);
+            }
+            
+            // Only update if we're viewing scan results and list changed
+            bool shouldUpdate = false;
+            if (currentState == VIEW_SCAN && (networkCount != n || networks.size() != newNetworks.size())) {
+                shouldUpdate = true;
+                // Validate selectedIndex will still be valid after update
+                if (selectedIndex >= newNetworks.size()) {
+                    selectedIndex = max(0, (int)newNetworks.size() - 1);
+                }
+            }
+            
+            // Update the network list atomically to prevent flashing
+            networks = std::move(newNetworks);
+            networkCount = n;
+            lastNetworkCount = networkCount;
+            
+            // Update display only if needed and with a small debounce
+            if (shouldUpdate && (millis() - lastScanUpdate >= 500)) {
+                lastScanUpdate = millis();
+                drawMenu(displayManager);
             }
             
             // Start next scan
@@ -327,11 +357,7 @@ bool WiFiModule::handleInput(uint8_t button) {
                 currentState = VIEW_SCAN;
                 scrollOffset = 0;
                 selectedIndex = networks.empty() ? -1 : 0;
-                // Pause scanning while viewing to prevent list changes
-                if (isScanning) {
-                    WiFi.scanDelete();
-                    isScanning = false;
-                }
+                // Keep scanning active while viewing results for live updates
                 drawMenu(displayManager); // Force redraw
             }
         } else if (button == 3) { // Back
@@ -404,6 +430,7 @@ bool WiFiModule::handleInput(uint8_t button) {
                 selectedIndex = max(0, (int)networks.size() - 1);
             }
             scrollOffset = 0;
+            // Keep scanning active when returning to menu
             drawMenu(displayManager);
         }
     }
@@ -625,8 +652,38 @@ void WiFiModule::initPcapFile() {
         return;
     }
     
-    // Create unique filename with timestamp
-    String filename = "/capture_" + String(millis()) + ".pcap";
+    // Create captures directory if it doesn't exist
+    if (!SD.exists("/captures")) {
+        SD.mkdir("/captures");
+    }
+    
+    // Get selected network SSID and sanitize it for filename
+    String networkName = "unknown";
+    int netIndex = getSelectedNetworkIndex();
+    if (netIndex >= 0 && netIndex < networks.size()) {
+        networkName = networks[netIndex].ssid;
+        // Replace invalid filename characters
+        networkName.replace("/", "_");
+        networkName.replace("\\", "_");
+        networkName.replace(":", "_");
+        networkName.replace("*", "_");
+        networkName.replace("?", "_");
+        networkName.replace("\"", "_");
+        networkName.replace("<", "_");
+        networkName.replace(">", "_");
+        networkName.replace("|", "_");
+        networkName.replace(" ", "_");
+        // Limit length to avoid filesystem issues
+        if (networkName.length() > 20) {
+            networkName = networkName.substring(0, 20);
+        }
+        if (networkName.length() == 0) {
+            networkName = "unknown";
+        }
+    }
+    
+    // Create filename with network name and timestamp
+    String filename = "/captures/" + networkName + "_" + String(millis()) + ".pcap";
     
     pcapFile = SD.open(filename, FILE_WRITE);
     if (!pcapFile) {
@@ -664,36 +721,48 @@ void WiFiModule::drawSnifferUI() {
     
     TFT_eSPI* tft = displayManager->getTFT();
     
+    unsigned long runtime = (millis() - snifferStats.startTime) / 1000;
+    bool pcapStatus = pcapFileOpen;
+    
+    // Check if key values have changed to minimize flashing
+    bool needsRedraw = (snifferStats.totalPackets != lastDisplayedTotal ||
+                       snifferStats.beacons != lastDisplayedBeacons ||
+                       snifferStats.deauth != lastDisplayedDeauth ||
+                       snifferStats.data != lastDisplayedData ||
+                       runtime != lastDisplayedRuntime ||
+                       pcapStatus != lastDisplayedPcapStatus);
+    
+    if (!needsRedraw) return;
+    
+    // Clear entire screen including top bar
     tft->fillScreen(TFT_BLACK);
     
-    // Title with recording indicator
+    // Title
     tft->setTextDatum(TC_DATUM);
     tft->setTextColor(TFT_CYAN, TFT_BLACK);
-    tft->drawString("Packet Sniffer", 120, 2, 2);
+    tft->drawString("Packet Sniffer", 120, 5, 2);
     
-    // PCAP recording status
-    if (pcapFileOpen) {
-        tft->setTextColor(TFT_RED, TFT_BLACK);
-        tft->fillCircle(20, 10, 5, TFT_RED);  // Recording indicator dot
-        tft->setTextColor(TFT_GREEN, TFT_BLACK);
-        tft->drawString("PCAP: " + String(pcapPacketCount), 200, 2, 1);
-    } else {
-        tft->setTextColor(TFT_ORANGE, TFT_BLACK);
-        tft->drawString("No SD", 200, 2, 1);
-    }
-    
-    // Channel and runtime on same line
+    // Channel and runtime with recording indicator
     tft->setTextColor(TFT_YELLOW, TFT_BLACK);
-    unsigned long runtime = (millis() - snifferStats.startTime) / 1000;
-    tft->drawString("Ch:" + String(snifferChannel) + " | " + String(runtime) + "s", 120, 18, 2);
+    String statusLine = "Ch:" + String(snifferChannel) + " | " + String(runtime) + "s";
+    if (pcapFileOpen) {
+        statusLine += " | REC";
+    } else {
+        statusLine += " | No SD";
+    }
+    tft->drawString(statusLine, 120, 25, 2);
     
     // Stats - left column
     tft->setTextDatum(TL_DATUM);
-    int y = 38;
-    int lineHeight = 16;
+    int y = 50;
+    int lineHeight = 18;
     
     tft->setTextColor(TFT_GREEN, TFT_BLACK);
-    tft->drawString("Total: " + String(snifferStats.totalPackets), 10, y, 2);
+    String totalText = "Total: " + String(snifferStats.totalPackets);
+    if (pcapFileOpen) {
+        totalText += " (PCAP)";
+    }
+    tft->drawString(totalText, 10, y, 2);
     y += lineHeight;
     
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
@@ -707,10 +776,9 @@ void WiFiModule::drawSnifferUI() {
     y += lineHeight;
     
     tft->drawString("Auth: " + String(snifferStats.auth), 10, y, 2);
-    y += lineHeight;
     
     // Stats - right column
-    y = 38 + lineHeight;
+    y = 50 + lineHeight;
     tft->setTextColor(TFT_RED, TFT_BLACK);
     tft->drawString("Deauth: " + String(snifferStats.deauth), 130, y, 2);
     y += lineHeight;
@@ -732,7 +800,15 @@ void WiFiModule::drawSnifferUI() {
     // Instructions at bottom
     tft->setTextDatum(BC_DATUM);
     tft->setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft->drawString("BACK: Stop & Save PCAP", 120, 165, 2);
+    tft->drawString("BACK: Stop & Save", 120, 165, 2);
+    
+    // Update cache values
+    lastDisplayedTotal = snifferStats.totalPackets;
+    lastDisplayedBeacons = snifferStats.beacons;
+    lastDisplayedDeauth = snifferStats.deauth;
+    lastDisplayedData = snifferStats.data;
+    lastDisplayedRuntime = runtime;
+    lastDisplayedPcapStatus = pcapStatus;
 }
 
 void WiFiModule::saveSnifferLogToSD() {

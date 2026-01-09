@@ -82,6 +82,16 @@ private:
     
     // Live update tracking
     unsigned long lastSnifferUpdate;
+    unsigned long lastScanUpdate;
+    int lastNetworkCount;
+    
+    // Sniffer display cache to reduce flashing
+    uint32_t lastDisplayedTotal;
+    uint32_t lastDisplayedBeacons;
+    uint32_t lastDisplayedDeauth;
+    uint32_t lastDisplayedData;
+    unsigned long lastDisplayedRuntime;
+    bool lastDisplayedPcapStatus;
     
 public:
     WiFiModule() : displayManager(nullptr) {}
