@@ -363,22 +363,37 @@ public:
 
             case IMPOSTOR_WORDLIST_SELECT:
                 if (button == 0) { // UP - Scroll up
+                    int totalItems = availableWordlists.size() + 1; // +1 for Next button
                     if (selectedWordlistIndex > 0) {
                         selectedWordlistIndex--;
-                        if (selectedWordlistIndex < wordlistScrollOffset) {
-                            wordlistScrollOffset = selectedWordlistIndex;
-                        }
-                        drawMenu(&displayManager);
+                    } else {
+                        // Wraparound to last item
+                        selectedWordlistIndex = totalItems - 1;
                     }
+                    
+                    // Adjust scroll offset
+                    if (selectedWordlistIndex < wordlistScrollOffset) {
+                        wordlistScrollOffset = selectedWordlistIndex;
+                    } else if (selectedWordlistIndex >= wordlistScrollOffset + 5) {
+                        wordlistScrollOffset = selectedWordlistIndex - 4;
+                    }
+                    drawMenu(&displayManager);
                 } else if (button == 1) { // DOWN - Scroll down
                     int totalItems = availableWordlists.size() + 1; // +1 for Next button
                     if (selectedWordlistIndex < totalItems - 1) {
                         selectedWordlistIndex++;
-                        if (selectedWordlistIndex >= wordlistScrollOffset + 5) {
-                            wordlistScrollOffset = selectedWordlistIndex - 4;
-                        }
-                        drawMenu(&displayManager);
+                    } else {
+                        // Wraparound to first item
+                        selectedWordlistIndex = 0;
                     }
+                    
+                    // Adjust scroll offset
+                    if (selectedWordlistIndex < wordlistScrollOffset) {
+                        wordlistScrollOffset = selectedWordlistIndex;
+                    } else if (selectedWordlistIndex >= wordlistScrollOffset + 5) {
+                        wordlistScrollOffset = selectedWordlistIndex - 4;
+                    }
+                    drawMenu(&displayManager);
                 } else if (button == 2) { // SELECT - Toggle checkbox or proceed
                     if (selectedWordlistIndex < (int)availableWordlists.size()) {
                         // Toggling a wordlist checkbox
