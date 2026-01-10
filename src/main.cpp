@@ -17,6 +17,7 @@
 #include "modules/wifi_storage_module.h"
 #include "modules/ble_storage_module.h"
 #include "modules/firmare_upgrade_module.h"
+#include "modules/firmware_launcher_module.h"
 #include "badusb_module.h"
 #include "sd_manager.h"
 #include "config_manager.h"
@@ -156,6 +157,7 @@ USBStorageModule usbStorageModule;
 WiFiStorageModule wifiStorageModule;
 BLEStorageModule bleStorageModule;
 FirmwareUpgradeModule firmwareUpgradeModule;
+FirmwareLauncherModule firmwareLauncherModule;
 
 int PIN_EXT_POWER = 17;
 
@@ -322,6 +324,7 @@ void setup() {
     // The order here determines the order in the menu!
     // To move items, just cut and paste these lines.
     
+    menuSystem.registerModule(&firmwareLauncherModule);
     menuSystem.registerModule(&bleModule);
     menuSystem.registerModule(&wifiModule);
     menuSystem.registerModule(&gameMenuModule);
