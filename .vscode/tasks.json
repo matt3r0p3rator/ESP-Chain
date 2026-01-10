@@ -5,6 +5,16 @@
 			"label": "Upload to Device",
 			"type": "shell",
 			"command": "platformio run --target upload --environment lilygo-t-display-s3"
+		},
+		{
+			"label": "Build Project",
+			"type": "shell",
+			"command": "C:\\Users\\gigab\\.platformio\\penv\\Scripts\\platformio.exe run --environment lilygo-t-display-s3"
+		},
+		{
+			"label": "Build",
+			"type": "shell",
+			"command": "C:\\Users\\gigab\\.platformio\\penv\\Scripts\\platformio.exe run --environment lilygo-t-display-s3"
 		}
 	]
 }

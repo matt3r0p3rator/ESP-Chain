@@ -97,7 +97,7 @@ public:
     WiFiModule() : displayManager(nullptr) {}
     void init() override;
     void loop() override;
-    String getName() override { 
+    String getName() override {
         if (currentState == VIEW_SCAN) return "Scan Results";
         else if (currentState == NETWORK_ACTIONS) return "Network Actions";
         else if (currentState == VIEW_DETAILS) return "Network Details";

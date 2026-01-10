@@ -34,27 +34,46 @@ struct PcapPacketHeader {
     uint32_t incl_len;       // number of bytes saved
     uint32_t orig_len;       // actual packet length
 };
+
+// Minimal radiotap header for 802.11 captures
+struct RadiotapHeader {
+    uint8_t version;         // 0
+    uint8_t pad;
+    uint16_t length;         // header length (8 bytes)
+    uint32_t present;        // present flags (0 = no fields)
+};
 #pragma pack(pop)
 
 // Write packet to PCAP file (called from sniffer callback)
 void writePcapPacket(const uint8_t* payload, uint32_t len) {
     if (!pcapFileOpen || !pcapFile) return;
     
+    // Create minimal radiotap header
+    RadiotapHeader rtHeader;
+    rtHeader.version = 0;
+    rtHeader.pad = 0;
+    rtHeader.length = 8;  // 8 bytes for minimal header
+    rtHeader.present = 0; // No additional fields
+    
+    // Calculate total packet length (radiotap + 802.11 frame)
+    uint32_t totalLen = sizeof(RadiotapHeader) + len;
+    
     // Create packet header
     PcapPacketHeader pktHeader;
     unsigned long ms = millis();
     pktHeader.ts_sec = ms / 1000;
     pktHeader.ts_usec = (ms % 1000) * 1000;
-    pktHeader.incl_len = len;
-    pktHeader.orig_len = len;
+    pktHeader.incl_len = totalLen;
+    pktHeader.orig_len = totalLen;
     
-    // Write packet header and data
+    // Write packet header, radiotap header, then 802.11 frame
     pcapFile.write((uint8_t*)&pktHeader, sizeof(PcapPacketHeader));
+    pcapFile.write((uint8_t*)&rtHeader, sizeof(RadiotapHeader));
     pcapFile.write(payload, len);
     pcapPacketCount++;
     
     // Flush periodically to avoid data loss
-    if (pcapPacketCount % 50 == 0) {
+    if (pcapPacketCount % 20 == 0) {
         pcapFile.flush();
     }
 }
@@ -106,8 +125,9 @@ void IRAM_ATTR wifiSnifferCallback(void* buf, wifi_promiscuous_pkt_type_t type) 
         snifferStats.other++;
     }
     
-    // Write packet to PCAP file
-    if (pcapFileOpen) {
+    // Write packet to PCAP file - use actual payload length
+    if (pcapFileOpen && pkt->rx_ctrl.sig_len > 0 && pkt->rx_ctrl.sig_len <= 2048) {
+        // Validate reasonable packet size to prevent corruption
         writePcapPacket(pkt->payload, pkt->rx_ctrl.sig_len);
     }
 }
@@ -164,6 +184,8 @@ void WiFiModule::loop() {
         // Check if scan is complete
         int n = WiFi.scanComplete();
         if (n >= 0) {
+            Serial.printf("DEBUG: Scan complete, found %d networks\n", n);
+            
             // Scan finished - rebuild network list
             std::vector<NetworkInfo> newNetworks;
             
@@ -175,7 +197,11 @@ void WiFiModule::loop() {
                 info.encryption = WiFi.encryptionType(i);
                 info.channel = WiFi.channel(i);
                 newNetworks.push_back(info);
+                Serial.printf("DEBUG: Network %d: %s (BSSID: %s, RSSI: %d)\n", 
+                              i, info.ssid.c_str(), info.bssid.c_str(), info.rssi);
             }
+            
+            Serial.printf("DEBUG: newNetworks.size() = %d\n", newNetworks.size());
             
             // Only update if we're viewing scan results and list changed
             bool shouldUpdate = false;
@@ -191,6 +217,21 @@ void WiFiModule::loop() {
             networks = std::move(newNetworks);
             networkCount = n;
             lastNetworkCount = networkCount;
+            
+            Serial.println("====================================");
+            Serial.printf("Total Networks Found: %d\n", networkCount);
+            Serial.println("====================================");
+            for (int i = 0; i < networks.size(); i++) {
+                Serial.printf("[%d] SSID: %s\n", i, networks[i].ssid.c_str());
+                Serial.printf("    BSSID: %s\n", networks[i].bssid.c_str());
+                Serial.printf("    RSSI: %d dBm\n", networks[i].rssi);
+                Serial.printf("    Channel: %d\n", networks[i].channel);
+                Serial.printf("    Encryption: %s\n", getEncryptionType(networks[i].encryption).c_str());
+                Serial.println("------------------------------------");
+            }
+            Serial.println("====================================");
+            Serial.printf("networks.size()=%d, networkCount=%d\n", 
+                          networks.size(), networkCount);
             
             // Update display only if needed and with a small debounce
             if (shouldUpdate && (millis() - lastScanUpdate >= 500)) {
@@ -208,13 +249,6 @@ void WiFiModule::loop() {
         }
     }
     
-    // Live update sniffer UI every 200ms
-    if (isSniffing && currentState == SNIFFING) {
-        if (millis() - lastSnifferUpdate >= 200) {
-            lastSnifferUpdate = millis();
-            drawSnifferUI();
-        }
-    }
 }
 
 void WiFiModule::drawMenu(DisplayManager* display) {
@@ -224,47 +258,37 @@ void WiFiModule::drawMenu(DisplayManager* display) {
 
     if (currentState == MENU) {
         display->clearMenu();
-        display->drawMenuTitle("WiFi Tools");
-        display->drawMenuItem(isScanning ? "Stop Scan --- Scanning..." : "Start Scan", 0, menuIndex == 0);
+        display->drawMenuItem("Toggle Scan", 0, menuIndex == 0);
         display->drawMenuItem("View Scan Results", 1, menuIndex == 1);
         display->updateMenu();
+        if (isScanning) {
+            display->getTFT()->setTextDatum(MC_DATUM);
+            display->getTFT()->setTextColor(TFT_GREEN, TFT_BLACK);
+            display->getTFT()->setTextSize(1);
+            display->getTFT()->drawString("Scanning", display->getTFT()->width() / 2, display->getTFT()->height() - 10, 2); // Bottom middle
+        }
     }
     else if (currentState == VIEW_SCAN) {
         display->clearMenu();
-        
-        if (networks.empty()) {
-            display->getTFT()->setTextDatum(TL_DATUM);
-            display->getTFT()->setTextColor(TFT_YELLOW, TFT_BLACK);
-            display->getTFT()->drawString("No networks found", 10, 40, 2);
-            display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
-            display->getTFT()->drawString("Start a scan first", 10, 65, 2);
-            display->getTFT()->drawString("BACK: Return to Menu", 10, 220, 2);
-        } else {
-            int itemsPerPage = 5;
-            int start = scrollOffset;
-            int end = start + itemsPerPage;
-            if (end > networks.size()) end = networks.size();
-            
-            for (int i = start; i < end; i++) {
-                // Format: "SSID | -70dBm | WPA2 | Ch:6"
-                String menuText = networks[i].ssid;
-                if (menuText.length() > 15) menuText = menuText.substring(0, 15);
-                menuText += " " + String(networks[i].rssi) + "dBm";
-                
-                display->drawMenuItem(menuText, i - start, i == selectedIndex);
-            }
-            
-            // Draw scroll bar if needed
-            if (networks.size() > itemsPerPage) {
-                display->drawScrollBar(networks.size(), scrollOffset, itemsPerPage);
-            }
-            
-            display->getTFT()->setTextDatum(TL_DATUM);
-            display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
-            display->getTFT()->drawString("BACK: Return", 10, 220, 2);
+        for (int i = 0; i < networks.size(); i++) {
+            String ssid = networks[i].ssid;
+            if (ssid.length() > 25) ssid = ssid.substring(0, 25);
+            String signal = getSignalStrength(networks[i].rssi);
+            String itemText = ssid + " [" + signal + "]";
+            display->drawMenuItem(itemText, i, i == selectedIndex);
         }
-        
         display->updateMenu();
+        if (isScanning) {
+            display->getTFT()->setTextDatum(MC_DATUM);
+            display->getTFT()->setTextColor(TFT_GREEN, TFT_BLACK);
+            display->getTFT()->setTextSize(1);
+            display->getTFT()->drawString("Scanning", display->getTFT()->width() / 2, display->getTFT()->height() - 10, 2); // Bottom middle
+        } else {
+            display->getTFT()->setTextDatum(MC_DATUM);
+            display->getTFT()->setTextColor(TFT_RED, TFT_BLACK);
+            display->getTFT()->setTextSize(1);
+            display->getTFT()->drawString("Scan Stopped", display->getTFT()->width() / 2, display->getTFT()->height() / 2 + 20, 2); // Bottom middle
+        }
     }
     else if (currentState == VIEW_DETAILS) {
         display->clearMenu();
@@ -302,7 +326,11 @@ void WiFiModule::drawMenu(DisplayManager* display) {
     else if (currentState == NETWORK_ACTIONS) {
         display->clearMenu();
         
+        Serial.println("DEBUG: Drawing NETWORK_ACTIONS menu");
+        
         int netIndex = getSelectedNetworkIndex();
+        Serial.printf("DEBUG: getSelectedNetworkIndex returned %d\n", netIndex);
+        
         if (netIndex >= 0 && netIndex < networks.size()) {
             String title = networks[netIndex].ssid;
             if (title.length() > 20) title = title.substring(0, 20);
@@ -313,6 +341,13 @@ void WiFiModule::drawMenu(DisplayManager* display) {
             display->drawMenuItem("Save to SD Card", 2, actionMenuIndex == 2);
             display->drawMenuItem("Copy SSID", 3, actionMenuIndex == 3);
             display->drawMenuItem("Back", 4, actionMenuIndex == 4);
+        } else {
+            Serial.println("DEBUG: Network index invalid, showing error");
+            display->getTFT()->setTextDatum(TL_DATUM);
+            display->getTFT()->setTextColor(TFT_RED, TFT_BLACK);
+            display->getTFT()->drawString("Network not found!", 10, 40, 2);
+            display->getTFT()->setTextColor(TFT_WHITE, TFT_BLACK);
+            display->getTFT()->drawString("BACK: Return", 10, 220, 2);
         }
         
         display->updateMenu();
@@ -341,12 +376,26 @@ bool WiFiModule::handleInput(uint8_t button) {
                 // Start/Stop Scan
                 if (!isScanning) {
                     // Start Scan
+                    Serial.println("DEBUG: Starting WiFi scan");
+                    
+                    // Ensure WiFi is fully stopped first
+                    esp_wifi_set_promiscuous(false);
+                    WiFi.mode(WIFI_OFF);
+                    delay(100);
+                    
+                    // Initialize WiFi in station mode
                     WiFi.mode(WIFI_STA);
                     WiFi.disconnect();
+                    delay(100);
+                    
                     networks.clear();
                     networkCount = 0;
-                    WiFi.scanNetworks(true); // Start async scan
+                    
+                    // Start scan with explicit parameters (all channels, show hidden)
+                    WiFi.scanNetworks(true, true); // async=true, show_hidden=true
                     isScanning = true;
+                    
+                    Serial.println("DEBUG: Scan started");
                 } else {
                     // Stop Scan
                     WiFi.scanDelete();
@@ -356,7 +405,12 @@ bool WiFiModule::handleInput(uint8_t button) {
             } else if (menuIndex == 1) {
                 currentState = VIEW_SCAN;
                 scrollOffset = 0;
-                selectedIndex = networks.empty() ? -1 : 0;
+                // Initialize selectedIndex properly
+                if (networks.empty()) {
+                    selectedIndex = -1;
+                } else {
+                    selectedIndex = 0;
+                }
                 // Keep scanning active while viewing results for live updates
                 drawMenu(displayManager); // Force redraw
             }
@@ -371,64 +425,73 @@ bool WiFiModule::handleInput(uint8_t button) {
     }
     else if (currentState == VIEW_SCAN) {
         int itemsPerPage = 5;
+        
         if (button == 0) { // Up
-            if (networks.size() == 0) return true; // Safety check
-            if (selectedIndex > 0) {
-                selectedIndex--;
-                if (selectedIndex < scrollOffset) {
-                    scrollOffset--;
-                }
-            } else if (selectedIndex == 0) {
-                // Wrap to bottom
+            if (networks.size() == 0) return true;
+            
+            selectedIndex--;
+            if (selectedIndex < 0) {
                 selectedIndex = networks.size() - 1;
                 scrollOffset = max(0, (int)networks.size() - itemsPerPage);
+            } else if (selectedIndex < scrollOffset) {
+                scrollOffset--;
             }
-            // Validate index after change
-            if (selectedIndex >= networks.size()) {
-                selectedIndex = max(0, (int)networks.size() - 1);
-            }
+            
+            Serial.printf("DEBUG: UP - selectedIndex=%d, scrollOffset=%d\n", selectedIndex, scrollOffset);
             drawMenu(displayManager);
+            
         } else if (button == 1) { // Down
-            if (networks.size() == 0) return true; // Safety check
-            if (selectedIndex < networks.size() - 1) {
-                selectedIndex++;
-                if (selectedIndex >= scrollOffset + itemsPerPage) {
-                    scrollOffset++;
-                }
-            } else if (selectedIndex == networks.size() - 1) {
-                // Wrap to top
+            if (networks.size() == 0) return true;
+            
+            selectedIndex++;
+            if (selectedIndex >= networks.size()) {
                 selectedIndex = 0;
                 scrollOffset = 0;
+            } else if (selectedIndex >= scrollOffset + itemsPerPage) {
+                scrollOffset++;
             }
-            // Validate index after change
-            if (selectedIndex >= networks.size()) {
-                selectedIndex = max(0, (int)networks.size() - 1);
-            }
+            
+            Serial.printf("DEBUG: DOWN - selectedIndex=%d, scrollOffset=%d\n", selectedIndex, scrollOffset);
             drawMenu(displayManager);
         } else if (button == 2) { // Select
-            // Validate selection is within bounds
-            if (selectedIndex >= 0 && selectedIndex < networks.size()) {
-                // Double-check bounds and network existence
-                if (networks.size() > selectedIndex) {
-                    // Store both SSID and BSSID for reliable identification
-                    selectedSSID = networks[selectedIndex].ssid;
-                    selectedBSSID = networks[selectedIndex].bssid;
-                    
-                    // Verify we got valid data
-                    if (selectedSSID.length() > 0 && selectedBSSID.length() > 0) {
-                        // Show network actions menu
-                        currentState = NETWORK_ACTIONS;
-                        actionMenuIndex = 0;
-                        drawMenu(displayManager);
-                    }
-                }
+            Serial.printf("DEBUG: SELECT pressed, selectedIndex=%d, networks.size()=%d\n", selectedIndex, networks.size());
+            
+            // Validate we have networks
+            if (networks.empty()) {
+                Serial.println("DEBUG: No networks available");
+                return true;
             }
-        } else if (button == 3) { // Back
-            currentState = MENU;
-            // Validate selectedIndex is still valid
+            
+            // Ensure selectedIndex is valid
+            if (selectedIndex < 0) {
+                selectedIndex = 0;
+                Serial.println("DEBUG: selectedIndex was negative, reset to 0");
+            }
             if (selectedIndex >= networks.size()) {
-                selectedIndex = max(0, (int)networks.size() - 1);
+                selectedIndex = networks.size() - 1;
+                Serial.printf("DEBUG: selectedIndex was too high, reset to %d\n", selectedIndex);
             }
+            
+            Serial.printf("DEBUG: Selecting network at index %d\n", selectedIndex);
+            
+            // Store both SSID and BSSID for reliable identification
+            selectedSSID = networks[selectedIndex].ssid;
+            selectedBSSID = networks[selectedIndex].bssid;
+            
+            Serial.printf("DEBUG: Selected SSID: '%s'\n", selectedSSID.c_str());
+            Serial.printf("DEBUG: Selected BSSID: '%s'\n", selectedBSSID.c_str());
+            
+            // Transition to network actions
+            currentState = NETWORK_ACTIONS;
+            actionMenuIndex = 0;
+            Serial.println("DEBUG: State changed to NETWORK_ACTIONS");
+            
+            // Force redraw
+            drawMenu(displayManager);
+            Serial.println("DEBUG: Menu redrawn");
+        } else if (button == 3) { // Back
+            Serial.println("DEBUG: BACK pressed from VIEW_SCAN");
+            currentState = MENU;
             scrollOffset = 0;
             // Keep scanning active when returning to menu
             drawMenu(displayManager);
@@ -699,7 +762,7 @@ void WiFiModule::initPcapFile() {
     header.thiszone = 0;
     header.sigfigs = 0;
     header.snaplen = 65535;
-    header.network = 105;  // IEEE 802.11 wireless LAN
+    header.network = 127;  // IEEE 802.11 with radiotap header
     
     pcapFile.write((uint8_t*)&header, sizeof(PcapGlobalHeader));
     pcapFile.flush();
