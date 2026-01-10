@@ -1,4 +1,5 @@
 #include "firmware_launcher_module.h"
+#include "display_manager.h"
 #include "ui/icons.h"
 #include <SD.h>
 

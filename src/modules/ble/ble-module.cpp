@@ -91,12 +91,12 @@ void BLEModule::loop() {
             if (typeToUse == ANDROID_PAIR) {
                 // Android Fast Pair Service Data
                 BLEUUID uuid((uint16_t)0xFE2C);
-                oAdvertisementData.setServiceData(uuid, dataStr);
+                oAdvertisementData.setServiceData(uuid, String(dataStr.c_str()));
                 oAdvertisementData.setCompleteServices(uuid); // Add the UUID announcement
                 oAdvertisementData.setFlags(0x06); // General Discoverable + BR/EDR Not Supported
             } else {
                 // Manufacturer Data for others (iOS, Windows, Samsung)
-                oAdvertisementData.setManufacturerData(dataStr);
+                oAdvertisementData.setManufacturerData(String(dataStr.c_str()));
             }
             
             pAdvertising->setAdvertisementData(oAdvertisementData);
@@ -126,25 +126,22 @@ void BLEModule::startScan() {
     scrollOffset = 0;
     
     // Scan for 1 second (blocking)
-    BLEScanResults found = pBLEScan->start(1, false);
+    BLEScanResults* found = pBLEScan->start(1, false);
     
-    int count = found.getCount();
+    int count = found->getCount();
     for (int i = 0; i < count; i++) {
-        BLEAdvertisedDevice device = found.getDevice(i);
+        BLEAdvertisedDevice device = found->getDevice(i);
         
-        // Copy strings immediately while device is valid
-        std::string nameStd = device.getName();
-        std::string addrStd = device.getAddress().toString();
-        String name = String(nameStd.c_str());
-        String address = String(addrStd.c_str());
+        // Copy strings immediately while device is valid (these methods return String)
+        String name = device.getName();
+        String address = device.getAddress().toString();
         int rssi = device.getRSSI();
         
         // Get service UUID and identify device type
         String uuidInfo = "";
         if (device.haveServiceUUID()) {
             BLEUUID serviceUUID = device.getServiceUUID();
-            std::string uuidStr = serviceUUID.toString();
-            String uuid = String(uuidStr.c_str());
+            String uuid = serviceUUID.toString();
             
             // Identify common device types by UUID
             if (uuid.indexOf("180a") >= 0) {

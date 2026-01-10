@@ -37,13 +37,12 @@ void DisplayManager::init() {
     menuSprite->createSprite(320, 150);
 
     // Setup PWM for backlight (Pin 38 as per TFT_BL, after TFT_eSPI init)
-    ledcSetup(0, 5000, 8); // Channel 0, 5kHz, 8-bit resolution
-    ledcAttachPin(38, 0);
-    ledcWrite(0, 128); // Default brightness
+    ledcAttach(38, 5000, 8); // Pin 38, 5kHz, 8-bit resolution
+    ledcWrite(38, 128); // Default brightness
 }
 
 void DisplayManager::setBrightness(int brightness) {
-    ledcWrite(0, brightness);
+    ledcWrite(38, brightness);
 }
 
 void DisplayManager::initRTC() {

@@ -202,7 +202,6 @@ LOG Attack completed
 - `WIFI_DEAUTH <target>` - Deauth attack
 - `SUBGHZ_SCAN <freq>` - Scan SubGHz frequency
 - `SUBGHZ_REPLAY <file>` - Replay captured signal
-- `LORA_SEND <message>` - Send LoRa message
 - `DELAY <ms>` - Wait milliseconds
 - `LOG <message>` - Write to log file
 - `EXEC <script>` - Execute another script (nested)
