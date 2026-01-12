@@ -5,6 +5,7 @@
 #include "USB.h"
 #include "USBMSC.h"
 #include "SdFat.h"
+#include "SPI.h"
 
 // Pins matching sd_manager.cpp
 #define SD_CS_PIN   10
@@ -21,13 +22,24 @@ static USBMSC MSC;
 
 // Callbacks
 static int32_t onRead(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize) {
-    if (!sdFat.card()->readSectors(lba, (uint8_t*)buffer, bufsize / 512)) return -1;
+    uint32_t sectorCount = bufsize / 512;
+    if (!sdFat.card()->readSectors(lba + (offset / 512), (uint8_t*)buffer, sectorCount)) {
+        return -1;
+    }
     return bufsize;
 }
 
 static int32_t onWrite(uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize) {
-    if (!sdFat.card()->writeSectors(lba, buffer, bufsize / 512)) return -1;
+    uint32_t sectorCount = bufsize / 512;
+    if (!sdFat.card()->writeSectors(lba + (offset / 512), buffer, sectorCount)) {
+        return -1;
+    }
+    sdFat.card()->syncDevice();  // Ensure data is written to card
     return bufsize;
+}
+
+static bool onStartStop(uint8_t power_condition, bool start, bool load_eject) {
+    return true;
 }
 
 class USBStorageModule : public Module {
@@ -84,25 +96,29 @@ public:
         // 1. Stop system SD
         sdManager.end();
         
-        // 2. Init SdFat
-        // Use the same SPI pins. We use the global SPI object which is already configured.
+        // 2. Re-initialize SPI for SdFat
+        SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
+        
+        // 3. Init SdFat with explicit SPI configuration
         if (!sdFat.begin(SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(16), &SPI))) {
              initFailed = true;
              drawMenu(&displayManager);
              return;
         }
         
-        // 3. Init MSC
+        // 4. Init MSC with correct order
+        uint32_t secCount = sdFat.card()->sectorCount();
+        
         MSC.vendorID("ESP32");
         MSC.productID("USB_MSC");
         MSC.productRevision("1.0");
         MSC.onRead(onRead);
         MSC.onWrite(onWrite);
-        MSC.mediaPresent(true);
+        MSC.onStartStop(onStartStop);
         
-        uint32_t secCount = sdFat.card()->sectorCount();
-        MSC.begin(secCount, 512);
         USB.begin();
+        MSC.begin(secCount, 512);
+        MSC.mediaPresent(true);
         
         isRunning = true;
         drawMenu(&displayManager);

@@ -25,7 +25,7 @@ struct PcapGlobalHeader {
     int32_t  thiszone;       // GMT offset (0)
     uint32_t sigfigs;        // timestamp accuracy (0)
     uint32_t snaplen;        // max packet length (65535)
-    uint32_t network;        // link layer type (105 = IEEE 802.11)
+    uint32_t network;        // link layer type (127 = IEEE 802.11 with radiotap)
 };
 
 struct PcapPacketHeader {
@@ -39,42 +39,50 @@ struct PcapPacketHeader {
 struct RadiotapHeader {
     uint8_t version;         // 0
     uint8_t pad;
-    uint16_t length;         // header length (8 bytes)
+    uint16_t length;         // header length in little-endian (8 bytes)
     uint32_t present;        // present flags (0 = no fields)
-};
+} __attribute__((packed));
 #pragma pack(pop)
 
 // Write packet to PCAP file (called from sniffer callback)
 void writePcapPacket(const uint8_t* payload, uint32_t len) {
     if (!pcapFileOpen || !pcapFile) return;
     
+    // Validate payload pointer and length
+    if (!payload || len == 0 || len > 2048) return;
+    
     // Create minimal radiotap header
     RadiotapHeader rtHeader;
     rtHeader.version = 0;
     rtHeader.pad = 0;
-    rtHeader.length = 8;  // 8 bytes for minimal header
+    rtHeader.length = 8;  // 8 bytes for minimal header (already in correct little-endian format on ESP32)
     rtHeader.present = 0; // No additional fields
     
     // Calculate total packet length (radiotap + 802.11 frame)
     uint32_t totalLen = sizeof(RadiotapHeader) + len;
     
-    // Create packet header
+    // Create packet header with proper timestamps
     PcapPacketHeader pktHeader;
     unsigned long ms = millis();
     pktHeader.ts_sec = ms / 1000;
-    pktHeader.ts_usec = (ms % 1000) * 1000;
+    pktHeader.ts_usec = (ms % 1000) * 1000;  // Convert ms to microseconds
     pktHeader.incl_len = totalLen;
     pktHeader.orig_len = totalLen;
     
     // Write packet header, radiotap header, then 802.11 frame
-    pcapFile.write((uint8_t*)&pktHeader, sizeof(PcapPacketHeader));
-    pcapFile.write((uint8_t*)&rtHeader, sizeof(RadiotapHeader));
-    pcapFile.write(payload, len);
-    pcapPacketCount++;
+    size_t written = 0;
+    written += pcapFile.write((uint8_t*)&pktHeader, sizeof(PcapPacketHeader));
+    written += pcapFile.write((uint8_t*)&rtHeader, sizeof(RadiotapHeader));
+    written += pcapFile.write(payload, len);
     
-    // Flush periodically to avoid data loss
-    if (pcapPacketCount % 20 == 0) {
-        pcapFile.flush();
+    // Only increment count if all data was written successfully
+    if (written == (sizeof(PcapPacketHeader) + sizeof(RadiotapHeader) + len)) {
+        pcapPacketCount++;
+        
+        // Flush periodically to avoid data loss and ensure file integrity
+        if (pcapPacketCount % 10 == 0) {
+            pcapFile.flush();
+        }
     }
 }
 
