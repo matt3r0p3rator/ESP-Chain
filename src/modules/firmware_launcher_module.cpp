@@ -10,7 +10,9 @@ FirmwareLauncherModule::FirmwareLauncherModule()
     , selectedOption(0)
     , scrollOffset(0)
     , installProgress(0)
-    , installTotal(0) {
+    , installTotal(0)
+    , bootStartTime(0)
+    , bootTriggered(false) {
 }
 
 void FirmwareLauncherModule::init() {
@@ -21,7 +23,39 @@ void FirmwareLauncherModule::init() {
 }
 
 void FirmwareLauncherModule::loop() {
-    // Nothing to loop continuously
+    // Handle delayed boot to secondary firmware
+    if (currentState == BOOT_SECONDARY && !bootTriggered) {
+        if (bootStartTime == 0) {
+            bootStartTime = millis();
+            Serial.println("Boot screen displayed, waiting 500ms...");
+        } else if (millis() - bootStartTime > 500) {
+            // Give time for the boot screen to display
+            bootTriggered = true;
+            Serial.println("Attempting to boot secondary firmware...");
+            
+            if (!FirmwareLauncher::getInstance().bootSecondaryFirmware()) {
+                // If boot failed, show error
+                Serial.println("Boot failed - no valid firmware or error");
+                errorMessage = "No Firmware Installed!\n\nUse 'Install from SD'\nto load a .bin file\nfirst\n\nPress any button";
+                currentState = BOOT_ERROR;
+                bootStartTime = 0;
+                bootTriggered = false;
+            }
+            // If boot succeeds, ESP.restart() is called and we never reach here
+        }
+    }
+    
+    // Handle delayed erase
+    if (currentState == ERASE_FIRMWARE) {
+        if (FirmwareLauncher::getInstance().eraseSecondaryFirmware()) {
+            Serial.println("Secondary firmware erased successfully");
+        } else {
+            Serial.println("Failed to erase secondary firmware");
+        }
+        delay(1000);
+        currentState = MAIN_MENU;
+        selectedOption = 0;
+    }
 }
 
 String FirmwareLauncherModule::getName() {
@@ -80,51 +114,51 @@ void FirmwareLauncherModule::drawMenu(DisplayManager* display) {
         case FILE_BROWSER:
             drawFileBrowser(display);
             break;
+        case BOOT_ERROR:
+            drawBootError(display);
+            break;
     }
 }
 
 void FirmwareLauncherModule::drawMainMenu(DisplayManager* display) {
-    display->clearContent();
-    display->drawMenuTitle("Firmware Launcher");
+    display->clearMenu();
     
-    std::vector<String> options;
     bool hasSecondary = FirmwareLauncher::getInstance().hasSecondaryFirmware();
     
+    String items[4];
+    int totalItems;
+    
     if (hasSecondary) {
-        options.push_back("Boot Secondary FW");
-        options.push_back("FW Info");
-        options.push_back("Erase Secondary FW");
+        items[0] = "Boot Secondary FW";
+        items[1] = "FW Info";
+        items[2] = "Erase Secondary FW";
+        totalItems = 3;
     } else {
-        options.push_back("Install from URL");
-        options.push_back("Install from SD");
-        options.push_back("FW Info");
+        items[0] = "Install from SD";
+        items[1] = "Install from URL";
+        items[2] = "FW Info";
+        totalItems = 3;
     }
     
-    TFT_eSPI* tft = display->getTFT();
-    tft->setTextDatum(TL_DATUM);
+    int start = scrollOffset;
+    int end = start + itemsPerPage;
+    if (end > totalItems) end = totalItems;
     
-    int y = 40;
-    int itemHeight = 30;
-    
-    for (size_t i = 0; i < options.size(); i++) {
-        if (i == selectedOption) {
-            tft->fillRect(10, y - 2, 300, itemHeight - 4, TFT_BLUE);
-            tft->setTextColor(TFT_WHITE, TFT_BLUE);
-        } else {
-            tft->setTextColor(TFT_WHITE, TFT_BLACK);
-        }
-        
-        tft->drawString(options[i], 15, y + 5, 2);
-        y += itemHeight;
+    for (int i = start; i < end; i++) {
+        display->drawMenuItem(items[i], i - scrollOffset, i == selectedOption);
     }
+    
+    display->drawScrollBar(totalItems, scrollOffset, itemsPerPage);
+    display->updateMenu();
     
     // Status at bottom
+    TFT_eSPI* tft = display->getTFT();
     tft->setTextDatum(MC_DATUM);
     tft->setTextColor(TFT_YELLOW, TFT_BLACK);
     if (hasSecondary) {
-        tft->drawString("Secondary FW: Installed", 160, 270, 2);
+        tft->drawString("Secondary FW: Ready", 160, 270, 2);
     } else {
-        tft->drawString("Secondary FW: None", 160, 270, 2);
+        tft->drawString("Install firmware to boot", 160, 270, 2);
     }
 }
 
@@ -149,11 +183,9 @@ void FirmwareLauncherModule::drawInstallFromSD(DisplayManager* display) {
         scanForBinFiles();
     }
     
-    display->clearContent();
-    display->drawMenuTitle("Install from SD");
+    display->clearMenu();
     
     TFT_eSPI* tft = display->getTFT();
-    tft->setTextDatum(TL_DATUM);
     
     if (fileList.empty()) {
         tft->setTextDatum(MC_DATUM);
@@ -165,33 +197,26 @@ void FirmwareLauncherModule::drawInstallFromSD(DisplayManager* display) {
         return;
     }
     
-    int y = 40;
-    int itemHeight = 30;
-    int visibleItems = 7;
+    int totalItems = fileList.size();
+    int start = scrollOffset;
+    int end = start + itemsPerPage;
+    if (end > totalItems) end = totalItems;
     
-    for (size_t i = scrollOffset; i < fileList.size() && i < scrollOffset + visibleItems; i++) {
-        if (i == selectedOption) {
-            tft->fillRect(10, y - 2, 300, itemHeight - 4, TFT_BLUE);
-            tft->setTextColor(TFT_WHITE, TFT_BLUE);
-        } else {
-            tft->setTextColor(TFT_WHITE, TFT_BLACK);
-        }
-        
+    for (int i = start; i < end; i++) {
         String displayName = fileList[i];
         if (displayName.length() > 35) {
             displayName = displayName.substring(0, 32) + "...";
         }
-        
-        tft->drawString(displayName, 15, y + 5, 2);
-        y += itemHeight;
+        display->drawMenuItem(displayName, i - scrollOffset, i == selectedOption);
     }
     
-    // Scroll indicator
-    if (fileList.size() > visibleItems) {
-        tft->setTextDatum(MC_DATUM);
-        tft->setTextColor(TFT_YELLOW, TFT_BLACK);
-        tft->drawString(String(selectedOption + 1) + "/" + String(fileList.size()), 160, 270, 2);
-    }
+    display->drawScrollBar(totalItems, scrollOffset, itemsPerPage);
+    display->updateMenu();
+    
+    // File count indicator
+    tft->setTextDatum(MC_DATUM);
+    tft->setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft->drawString(String(selectedOption + 1) + "/" + String(totalItems), 160, 270, 2);
 }
 
 void FirmwareLauncherModule::drawFirmwareInfo(DisplayManager* display) {
@@ -281,64 +306,58 @@ void FirmwareLauncherModule::drawInstalling(DisplayManager* display) {
 }
 
 void FirmwareLauncherModule::drawConfirmBoot(DisplayManager* display) {
-    display->clearContent();
-    display->drawMenuTitle("Confirm Boot");
+    display->clearMenu();
+    
+    String items[] = {"YES - Boot Secondary FW", "NO - Cancel"};
+    int totalItems = 2;
+    
+    for (int i = 0; i < totalItems; i++) {
+        display->drawMenuItem(items[i], i, i == selectedOption);
+    }
+    
+    display->updateMenu();
     
     TFT_eSPI* tft = display->getTFT();
     tft->setTextDatum(MC_DATUM);
-    tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    
-    tft->drawString("Boot into secondary", 160, 70, 2);
-    tft->drawString("firmware?", 160, 100, 2);
-    
     tft->setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft->drawString("Device will restart", 160, 140, 2);
-    
-    // Options
-    int optionY = 180;
-    if (selectedOption == 0) {
-        tft->fillRect(60, optionY - 5, 80, 30, TFT_GREEN);
-        tft->setTextColor(TFT_BLACK, TFT_GREEN);
-        tft->drawString("YES", 100, optionY, 2);
-        tft->setTextColor(TFT_WHITE, TFT_BLACK);
-        tft->drawString("NO", 220, optionY, 2);
-    } else {
-        tft->setTextColor(TFT_WHITE, TFT_BLACK);
-        tft->drawString("YES", 100, optionY, 2);
-        tft->fillRect(180, optionY - 5, 80, 30, TFT_RED);
-        tft->setTextColor(TFT_BLACK, TFT_RED);
-        tft->drawString("NO", 220, optionY, 2);
-    }
+    tft->drawString("Device will restart", 160, 160, 2);
 }
 
 void FirmwareLauncherModule::drawConfirmErase(DisplayManager* display) {
-    display->clearContent();
-    display->drawMenuTitle("Confirm Erase");
+    display->clearMenu();
+    
+    String items[] = {"YES - Erase Firmware", "NO - Cancel"};
+    int totalItems = 2;
+    
+    for (int i = 0; i < totalItems; i++) {
+        display->drawMenuItem(items[i], i, i == selectedOption);
+    }
+    
+    display->updateMenu();
     
     TFT_eSPI* tft = display->getTFT();
     tft->setTextDatum(MC_DATUM);
-    tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    
-    tft->drawString("Erase secondary", 160, 70, 2);
-    tft->drawString("firmware?", 160, 100, 2);
-    
     tft->setTextColor(TFT_RED, TFT_BLACK);
-    tft->drawString("This cannot be undone!", 160, 140, 2);
+    tft->drawString("This cannot be undone!", 160, 160, 2);
+}
+
+void FirmwareLauncherModule::drawBootError(DisplayManager* display) {
+    display->clearContent();
+    display->drawMenuTitle("Boot Error");
     
-    // Options
-    int optionY = 180;
-    if (selectedOption == 0) {
-        tft->fillRect(60, optionY - 5, 80, 30, TFT_GREEN);
-        tft->setTextColor(TFT_BLACK, TFT_GREEN);
-        tft->drawString("YES", 100, optionY, 2);
-        tft->setTextColor(TFT_WHITE, TFT_BLACK);
-        tft->drawString("NO", 220, optionY, 2);
-    } else {
-        tft->setTextColor(TFT_WHITE, TFT_BLACK);
-        tft->drawString("YES", 100, optionY, 2);
-        tft->fillRect(180, optionY - 5, 80, 30, TFT_RED);
-        tft->setTextColor(TFT_BLACK, TFT_RED);
-        tft->drawString("NO", 220, optionY, 2);
+    TFT_eSPI* tft = display->getTFT();
+    tft->setTextDatum(MC_DATUM);
+    tft->setTextColor(TFT_RED, TFT_BLACK);
+    
+    int y = 70;
+    int lineStart = 0;
+    for (size_t i = 0; i <= errorMessage.length(); i++) {
+        if (i == errorMessage.length() || errorMessage[i] == '\n') {
+            String line = errorMessage.substring(lineStart, i);
+            tft->drawString(line, 160, y, 2);
+            y += 25;
+            lineStart = i + 1;
+        }
     }
 }
 
@@ -352,10 +371,27 @@ bool FirmwareLauncherModule::handleInput(uint8_t button) {
         int maxOptions = hasSecondary ? 3 : 3;
         
         if (button == 0) { // Up
-            selectedOption = (selectedOption - 1 + maxOptions) % maxOptions;
+            if (selectedOption > 0) {
+                selectedOption--;
+                if (selectedOption < scrollOffset) {
+                    scrollOffset--;
+                }
+            } else {
+                selectedOption = maxOptions - 1;
+                scrollOffset = maxOptions - itemsPerPage;
+                if (scrollOffset < 0) scrollOffset = 0;
+            }
             return true;
         } else if (button == 1) { // Down
-            selectedOption = (selectedOption + 1) % maxOptions;
+            if (selectedOption < maxOptions - 1) {
+                selectedOption++;
+                if (selectedOption >= scrollOffset + itemsPerPage) {
+                    scrollOffset++;
+                }
+            } else {
+                selectedOption = 0;
+                scrollOffset = 0;
+            }
             return true;
         } else if (button == 2) { // Select
             if (hasSecondary) {
@@ -370,12 +406,12 @@ bool FirmwareLauncherModule::handleInput(uint8_t button) {
                 }
             } else {
                 if (selectedOption == 0) {
-                    currentState = INSTALL_FROM_URL;
-                } else if (selectedOption == 1) {
                     currentState = INSTALL_FROM_SD;
                     selectedOption = 0;
                     scrollOffset = 0;
                     fileList.clear();
+                } else if (selectedOption == 1) {
+                    currentState = INSTALL_FROM_URL;
                 } else if (selectedOption == 2) {
                     currentState = FIRMWARE_INFO;
                 }
@@ -401,7 +437,7 @@ bool FirmwareLauncherModule::handleInput(uint8_t button) {
             } else if (button == 1) { // Down
                 if (selectedOption < fileList.size() - 1) {
                     selectedOption++;
-                    if (selectedOption >= scrollOffset + 7) {
+                    if (selectedOption >= scrollOffset + itemsPerPage) {
                         scrollOffset++;
                     }
                 }
@@ -429,14 +465,19 @@ bool FirmwareLauncherModule::handleInput(uint8_t button) {
             }
         }
     } else if (currentState == CONFIRM_BOOT) {
-        if (button == 0 || button == 1) { // Up/Down - toggle YES/NO
-            selectedOption = 1 - selectedOption;
+        if (button == 0) { // Up
+            selectedOption = (selectedOption == 0) ? 1 : 0;
+            return true;
+        } else if (button == 1) { // Down
+            selectedOption = (selectedOption == 0) ? 1 : 0;
             return true;
         } else if (button == 2) { // Select
             if (selectedOption == 0) { // YES
+                Serial.println("User confirmed boot to secondary firmware");
                 currentState = BOOT_SECONDARY;
-                delay(100);
-                FirmwareLauncher::getInstance().bootSecondaryFirmware();
+                bootStartTime = 0;
+                bootTriggered = false;
+                return true; // Draw the boot screen first
             } else { // NO
                 currentState = MAIN_MENU;
                 selectedOption = 0;
@@ -448,17 +489,17 @@ bool FirmwareLauncherModule::handleInput(uint8_t button) {
             return true;
         }
     } else if (currentState == CONFIRM_ERASE) {
-        if (button == 0 || button == 1) { // Up/Down - toggle YES/NO
-            selectedOption = 1 - selectedOption;
+        if (button == 0) { // Up
+            selectedOption = (selectedOption == 0) ? 1 : 0;
+            return true;
+        } else if (button == 1) { // Down
+            selectedOption = (selectedOption == 0) ? 1 : 0;
             return true;
         } else if (button == 2) { // Select
             if (selectedOption == 0) { // YES
+                Serial.println("User confirmed erase secondary firmware");
                 currentState = ERASE_FIRMWARE;
-                delay(100);
-                FirmwareLauncher::getInstance().eraseSecondaryFirmware();
-                delay(1000);
-                currentState = MAIN_MENU;
-                selectedOption = 0;
+                return true;
             } else { // NO
                 currentState = MAIN_MENU;
                 selectedOption = 0;
@@ -469,6 +510,11 @@ bool FirmwareLauncherModule::handleInput(uint8_t button) {
             selectedOption = 0;
             return true;
         }
+    } else if (currentState == BOOT_ERROR) {
+        // Any button press returns to main menu
+        currentState = MAIN_MENU;
+        selectedOption = 0;
+        return true;
     } else if (button == 3) { // Back from other states
         currentState = MAIN_MENU;
         selectedOption = 0;

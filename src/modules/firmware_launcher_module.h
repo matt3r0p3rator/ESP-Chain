@@ -30,22 +30,27 @@ private:
         FILE_BROWSER,
         INSTALLING,
         CONFIRM_BOOT,
-        CONFIRM_ERASE
+        CONFIRM_ERASE,
+        BOOT_ERROR
     };
     
     MenuState currentState;
     int selectedOption;
     int scrollOffset;
+    static const int itemsPerPage = 5;
     
     // WiFi credentials
     String wifiSSID;
     String wifiPassword;
     String firmwareURL;
     String selectedFile;
+    String errorMessage;
     
     // Installation progress
     size_t installProgress;
     size_t installTotal;
+    unsigned long bootStartTime;
+    bool bootTriggered;
     
     // File browser
     std::vector<String> fileList;
@@ -62,6 +67,7 @@ private:
     void drawInstalling(DisplayManager* display);
     void drawConfirmBoot(DisplayManager* display);
     void drawConfirmErase(DisplayManager* display);
+    void drawBootError(DisplayManager* display);
     
     void scanForBinFiles();
     void startInstallation();

@@ -29,6 +29,12 @@ bool FirmwareLauncher::hasSecondaryFirmware() {
 }
 
 bool FirmwareLauncher::bootSecondaryFirmware() {
+    // Get current running partition
+    const esp_partition_t* current = esp_ota_get_running_partition();
+    if (current) {
+        Serial.printf("Current partition: %s (subtype: %d)\n", current->label, current->subtype);
+    }
+    
     const esp_partition_t* ota_partition = esp_partition_find_first(
         ESP_PARTITION_TYPE_APP, 
         ESP_PARTITION_SUBTYPE_APP_OTA_1, 
@@ -40,21 +46,40 @@ bool FirmwareLauncher::bootSecondaryFirmware() {
         return false;
     }
     
+    Serial.printf("OTA_1 partition found: %s at 0x%x, size: %d\n", 
+                  ota_partition->label, ota_partition->address, ota_partition->size);
+    
     if (!hasSecondaryFirmware()) {
         Serial.println("No valid secondary firmware");
         return false;
     }
     
     // Set the boot partition to OTA_1
+    Serial.println("Setting boot partition to OTA_1...");
     esp_err_t err = esp_ota_set_boot_partition(ota_partition);
     if (err != ESP_OK) {
-        Serial.printf("Failed to set boot partition: %d\n", err);
+        Serial.printf("Failed to set boot partition: %d (%s)\n", err, esp_err_to_name(err));
         return false;
     }
     
-    Serial.println("Rebooting to secondary firmware...");
+    // Verify it was set
+    const esp_partition_t* boot_partition = esp_ota_get_boot_partition();
+    if (boot_partition) {
+        Serial.printf("Boot partition now set to: %s\n", boot_partition->label);
+    }
+    
+    Serial.println("Rebooting to secondary firmware in 1 second...");
+    Serial.flush(); // Ensure all serial data is sent
     delay(1000);
+    
+    Serial.println("Restarting NOW...");
+    Serial.flush();
     ESP.restart();
+    
+    // Should never reach here, but just in case
+    while(1) {
+        delay(100);
+    }
     
     return true;
 }
@@ -248,18 +273,38 @@ bool FirmwareLauncher::installFirmwareFromSD(const String& filepath) {
 }
 
 String FirmwareLauncher::getSecondaryFirmwareInfo() {
+    // Show current running partition
+    const esp_partition_t* current = esp_ota_get_running_partition();
+    String currentInfo = "Current: ";
+    if (current) {
+        currentInfo += String(current->label);
+        currentInfo += " (";
+        if (current->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_0) {
+            currentInfo += "OTA_0";
+        } else if (current->subtype == ESP_PARTITION_SUBTYPE_APP_OTA_1) {
+            currentInfo += "OTA_1";
+        } else if (current->subtype == ESP_PARTITION_SUBTYPE_APP_FACTORY) {
+            currentInfo += "FACTORY";
+        } else {
+            currentInfo += String(current->subtype);
+        }
+        currentInfo += ")\\n";
+    } else {
+        currentInfo += "Unknown\\n";
+    }
+    
     if (!hasSecondaryFirmware()) {
-        return "No secondary firmware installed";
+        return currentInfo + "\\nNo secondary firmware installed\\nInstall .bin file from SD";
     }
     
     const esp_partition_t* ota_partition = getOtaPartition();
     if (!ota_partition) {
-        return "Error reading partition";
+        return currentInfo + "\\nError reading partition";
     }
     
-    char info[128];
-    snprintf(info, sizeof(info), "Secondary FW installed\nPartition: OTA_1\nSize: %d KB", 
-             ota_partition->size / 1024);
+    char info[256];
+    snprintf(info, sizeof(info), "%sSecondary: OTA_1\\nSize: %d KB\\nStatus: Ready to boot", 
+             currentInfo.c_str(), ota_partition->size / 1024);
     
     return String(info);
 }
