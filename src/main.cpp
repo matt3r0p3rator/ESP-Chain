@@ -333,7 +333,7 @@ void setup() {
     // The order here determines the order in the menu!
     // To move items, just cut and paste these lines.
     
-    menuSystem.registerModule(&firmwareLauncherModule);
+    //menuSystem.registerModule(&firmwareLauncherModule);
     menuSystem.registerModule(&bleModule);
     menuSystem.registerModule(&wifiModule);
     menuSystem.registerModule(&gameMenuModule);
