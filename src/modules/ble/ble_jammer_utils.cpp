@@ -149,7 +149,7 @@ void BLEJammerUtils::sendInterferencePacket() {
     std::string dataStr((char*)payload.data(), payload.size());
     
     BLEAdvertisementData advData;
-    advData.setManufacturerData(String(dataStr.c_str()));
+    advData.setManufacturerData(dataStr);
     advData.setFlags(0x06);
     
     pAdvertising->setAdvertisementData(advData);
@@ -187,7 +187,7 @@ void BLEJammerUtils::sendMimicPacket() {
         advData.setCompleteServices(BLEUUID(currentTarget.serviceUUID.c_str()));
     }
     
-    advData.setManufacturerData(String(dataStr.c_str()));
+    advData.setManufacturerData(dataStr);
     advData.setFlags(0x06);
     
     // Set name similar to target if it has one
@@ -240,7 +240,7 @@ void BLEJammerUtils::sendDeauthPacket() {
     std::string dataStr((char*)payload.data(), payload.size());
     
     BLEAdvertisementData advData;
-    advData.setManufacturerData(String(dataStr.c_str()));
+    advData.setManufacturerData(dataStr);
     advData.setFlags(0x1A); // Different flags to cause confusion
     
     pAdvertising->setAdvertisementData(advData);
@@ -349,9 +349,9 @@ void BLEJammerUtils::resetPacketCount() {
 BLETargetDevice BLEJammerUtils::parseDevice(BLEAdvertisedDevice& device) {
     BLETargetDevice target;
     
-    // Safely copy strings (getName and toString return String not std::string)
-    target.name = device.getName();
-    target.address = device.getAddress().toString();
+    // Safely copy strings (convert std::string to String)
+    target.name = String(device.getName().c_str());
+    target.address = String(device.getAddress().toString().c_str());
     
     target.rssi = device.getRSSI();
     target.isConnectable = false; // Default, checking can crash
@@ -359,7 +359,7 @@ BLETargetDevice BLEJammerUtils::parseDevice(BLEAdvertisedDevice& device) {
     // Try to get service UUID as string safely
     target.serviceUUID = "";
     if (device.haveServiceUUID()) {
-        target.serviceUUID = device.getServiceUUID().toString();
+        target.serviceUUID = String(device.getServiceUUID().toString().c_str());
     }
     
     return target;

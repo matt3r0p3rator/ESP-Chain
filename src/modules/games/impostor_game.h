@@ -8,6 +8,7 @@
 enum ImpostorGameState {
     IMPOSTOR_PLAYER_SELECT,
     IMPOSTOR_WORDLIST_SELECT,
+    IMPOSTOR_MODIFIER_SELECT,
     IMPOSTOR_DISTRIBUTE,
     IMPOSTOR_REVEAL
 };
@@ -15,18 +16,24 @@ enum ImpostorGameState {
 class ImpostorGame : public Module {
 private:
     ImpostorGameState state;
+    bool isAllImpostor; // All are impostors
+    bool isAntiImpostor; // All but one are impostors
+    bool isNoImpostor; // All have the word
     int numPlayers;
+    int oldNumPlayers;
     int selectedPlayerIndex;
     int currentPlayerRevealing;
     int impostorPlayer;
     String selectedWord;
+    String selectedWordlist; // Show to impostor
     std::vector<String> selectedWordlists;
     std::vector<String> availableWordlists;
     int wordlistScrollOffset;
     int selectedWordlistIndex;
     bool wordDistributed;
     unsigned long revealStartTime;
-    const int REVEAL_DURATION = 3000; // 3 seconds to view the word
+    const int REVEAL_DURATION = 1500; // 1.5 seconds to view the word
+    const double modiferChance = 1; // 1/2 chance to do one of 3 modifiers
     
     SDManager sdManager;
 
@@ -115,8 +122,17 @@ private:
     void distributeWords() {
         randomSeed(millis());
         
-        // Pick random impostor
-        impostorPlayer = random(0, numPlayers);
+        // Pick random impostor based on modifiers
+        if (isAntiImpostor) {
+            // All but one are impostors - pick the one player who gets the word
+            impostorPlayer = random(0, numPlayers); // This is actually the NON-impostor
+        } else if (!isAllImpostor && !isNoImpostor) {
+            // Normal mode - one impostor
+            impostorPlayer = random(0, numPlayers);
+        } else {
+            // For isAllImpostor and isNoImpostor, impostorPlayer isn't used the same way
+            impostorPlayer = -1; // No specific impostor
+        }
         
         // Pick random word
         selectedWord = getRandomWord();
@@ -150,8 +166,27 @@ private:
         // Instructions
         tft->setTextSize(1);
         tft->setTextColor(THEME_TEXT, THEME_BG);
-        tft->drawString("Btn0/1: Change", 160, 130, 2);
-        tft->drawString("Long Press 0: Next", 160, 150, 2);
+        tft->drawString("Up/Down: Change", 160, 130, 2);
+        tft->drawString("Long Press Top: Next", 160, 150, 2);
+    }
+
+    void drawModifierSelection(DisplayManager* display) {
+        display->clearContent();
+
+        TFT_eSPI* tft = display->getTFT();
+        tft->setTextDatum(TC_DATUM);
+
+        // Title
+        tft->setTextColor(THEME_TEXT, THEME_BG);
+        tft->setTextSize(1);
+        tft->drawString("Select if you want a chance for modifiers", 160, 30, 4);
+        tft->drawString("to be applied to the game.", 160, 50, 4);
+        
+        // Instructions
+        tft->setTextSize(1);
+        tft->setTextColor(THEME_TEXT, THEME_BG);
+        tft->drawString("Up BTN: No Modifiers", 160, 100, 2);
+        tft->drawString("Down BTN: Allow Modifiers", 160, 120, 2);
     }
 
     void drawWordlistSelection(DisplayManager* display) {
@@ -247,8 +282,40 @@ private:
         playerText += String(currentPlayerRevealing + 1);
         tft->drawString(playerText, 160, 40, 2);
         
-        // Show word or impostor message
-        if (currentPlayerRevealing == impostorPlayer) {
+        // Determine what to show based on modifiers
+        bool showWord = true;
+        bool showImpostor = false;
+        
+        if (isAllImpostor) {
+            // Everyone is impostor - no one gets the word
+            showWord = false;
+            showImpostor = true;
+        } else if (isAntiImpostor) {
+            // All but one are impostors - only the selected player gets the word
+            if (currentPlayerRevealing == impostorPlayer) {
+                showWord = true;
+                showImpostor = false;
+            } else {
+                showWord = false;
+                showImpostor = true;
+            }
+        } else if (isNoImpostor) {
+            // Everyone gets the word
+            showWord = true;
+            showImpostor = false;
+        } else {
+            // Normal mode - one impostor
+            if (currentPlayerRevealing == impostorPlayer) {
+                showWord = false;
+                showImpostor = true;
+            } else {
+                showWord = true;
+                showImpostor = false;
+            }
+        }
+        
+        // Show word or impostor message based on logic above
+        if (showImpostor) {
             tft->setTextColor(TFT_RED, THEME_BG);
             tft->setTextSize(1);
             tft->setFreeFont(&FreeSans24pt7b);
@@ -257,7 +324,9 @@ private:
             tft->setTextColor(THEME_TEXT, THEME_BG);
             tft->drawString("No word for you!", 160, 120, 2);
             tft->drawString("Blend in!", 160, 140, 2);
-        } else {
+        }
+        
+        if (showWord) {
             // Show the word
             tft->setTextColor(TFT_YELLOW, THEME_BG);
             tft->setTextSize(1);
@@ -283,7 +352,7 @@ public:
 
     void init() override {
         state = IMPOSTOR_PLAYER_SELECT;
-        numPlayers = 5;
+        numPlayers = oldNumPlayers > 0 ? oldNumPlayers : 5;
         wordDistributed = false;
         currentPlayerRevealing = 0;
         impostorPlayer = -1;
@@ -335,6 +404,9 @@ public:
             case IMPOSTOR_REVEAL:
                 drawReveal(display);
                 break;
+            case IMPOSTOR_MODIFIER_SELECT:
+                drawModifierSelection(display);
+                break;
         }
     }
 
@@ -354,6 +426,7 @@ public:
                         drawMenu(&displayManager);
                     }
                 } else if (button == 2) { // SELECT
+                    oldNumPlayers = numPlayers;
                     state = IMPOSTOR_WORDLIST_SELECT;
                     drawMenu(&displayManager);
                 } else if (button == 3) { // BACK
@@ -419,12 +492,39 @@ public:
                     } else {
                         // Next button pressed
                         if (selectedWordlists.size() > 0) {
-                            distributeWords();
+                            state = IMPOSTOR_MODIFIER_SELECT;
                             drawMenu(&displayManager);
                         }
                     }
                 } else if (button == 3) { // BACK
                     state = IMPOSTOR_PLAYER_SELECT;
+                    drawMenu(&displayManager);
+                }
+                break;
+            case IMPOSTOR_MODIFIER_SELECT:
+                if (button == 0) { // UP - No Modifiers
+                    isAllImpostor = false;
+                    isAntiImpostor = false;
+                    isNoImpostor = false;
+                    distributeWords();
+                    drawMenu(&displayManager);
+                } else if (button == 1) { // DOWN - Allow Modifiers
+                    // Randomly pick a modifier
+                    double roll = random(0, 1000) / 1000.0;
+                    if (roll < modiferChance) {
+                        int modType = random(0, 3); 
+                        isAllImpostor = (modType == 0);
+                        isAntiImpostor = (modType == 1);
+                        isNoImpostor = (modType == 2);
+                    } else {
+                        isAllImpostor = false;
+                        isAntiImpostor = false;
+                        isNoImpostor = false;
+                    }
+                    distributeWords();
+                    drawMenu(&displayManager);
+                } else if (button == 3) { // BACK
+                    state = IMPOSTOR_WORDLIST_SELECT;
                     drawMenu(&displayManager);
                 }
                 break;

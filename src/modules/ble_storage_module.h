@@ -266,7 +266,8 @@ public:
     FileWriteCallbacks(BLEStorageModule* mod) : module(mod) {}
     
     void onWrite(BLECharacteristic* pCharacteristic) {
-        String value = pCharacteristic->getValue();
+        std::string stdValue = pCharacteristic->getValue();
+        String value = String(stdValue.c_str());
         if (value.length() > 0) {
             // Write data to file
             if (module->currentFile && module->fileTransferActive) {
