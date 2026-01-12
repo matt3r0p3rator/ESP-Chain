@@ -56,8 +56,8 @@ void MenuSystem::handleInput(uint8_t input) {
         if (!activeModule->handleInput(input)) {
             inModule = false;
             activeModule = nullptr;
-            draw();
         }
+        draw();
         return;
     }
 

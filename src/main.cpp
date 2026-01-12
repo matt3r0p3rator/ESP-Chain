@@ -272,6 +272,15 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Starting ESP-Chain...");
 
+    // Ensure we boot from app0 by default
+    const esp_partition_t* current = esp_ota_get_running_partition();
+    const esp_partition_t* app0 = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
+    if (current && app0 && current->address == app0->address) {
+        // We're running from app0, set it as default boot
+        esp_ota_set_boot_partition(app0);
+        Serial.println("Set app0 (ESP-Chain) as default boot partition");
+    }
+
     // Initialize Display
     displayManager.init();
     checkPin();
@@ -324,7 +333,7 @@ void setup() {
     // The order here determines the order in the menu!
     // To move items, just cut and paste these lines.
     
-    menuSystem.registerModule(&firmwareLauncherModule);
+    //menuSystem.registerModule(&firmwareLauncherModule);
     menuSystem.registerModule(&bleModule);
     menuSystem.registerModule(&wifiModule);
     menuSystem.registerModule(&gameMenuModule);
